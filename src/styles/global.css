@@ -1,0 +1,34 @@
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500&display=swap');
+
+:root {
+  --azul-escuro:  #0f1f36;
+  --azul-medio:   #1a3355;
+  --azul-claro:   #2563a8;
+  --dourado:      #c8a96e;
+  --dourado-claro:#e8c98e;
+  --branco:       #f4f1eb;
+  --cinza-claro:  #d9d4c8;
+  --cinza-medio:  #8a8478;
+  --vermelho:     #c0392b;
+  --verde:        #27805a;
+
+  --fonte-titulo: 'Syne', sans-serif;
+  --fonte-corpo:  'DM Sans', sans-serif;
+  --raio:         8px;
+  --raio-lg:      12px;
+  --sombra:       0 2px 16px rgba(0,0,0,0.3);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body, #root {
+  height: 100%;
+  font-family: var(--fonte-corpo);
+  background: var(--azul-escuro);
+  color: var(--branco);
+  -webkit-font-smoothing: antialiased;
+}
+
+button { font-family: var(--fonte-corpo); cursor: pointer; border: none; outline: none; }
+input, select, textarea { font-family: var(--fonte-corpo); outline: none; }
+a { color: inherit; text-decoration: none; }
