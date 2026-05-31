@@ -1,0 +1,42 @@
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500&display=swap');
+
+:root {
+  /* Verde CIOPAER */
+  --verde-base:   #00803D;
+  --verde-escuro: #004d2c;
+  --verde-claro:  #00a84f;
+  --verde-dim:    rgba(0,128,61,0.15);
+
+  /* Neutros */
+  --branco:       #f0ece3;
+  --cinza-claro:  #c8c4bb;
+  --cinza-medio:  #7a7870;
+  --preto-soft:   #0a1a10;
+
+  /* Feedback */
+  --vermelho:     #c0392b;
+  --amarelo:      #f39c12;
+
+  /* Tipografia */
+  --fonte-titulo: 'Syne', sans-serif;
+  --fonte-corpo:  'DM Sans', sans-serif;
+
+  /* Layout */
+  --raio:     8px;
+  --raio-lg:  14px;
+  --sombra:   0 4px 24px rgba(0,0,0,0.4);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body, #root {
+  height: 100%;
+  font-family: var(--fonte-corpo);
+  background: var(--verde-escuro);
+  color: var(--branco);
+  -webkit-font-smoothing: antialiased;
+}
+
+button { font-family: var(--fonte-corpo); cursor: pointer; border: none; outline: none; }
+input, select, textarea { font-family: var(--fonte-corpo); outline: none; }
+a { color: inherit; text-decoration: none; }
