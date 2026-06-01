@@ -11,9 +11,9 @@ const BRASAO = 'https://blogger.googleusercontent.com/img/a/AVvXsEj0RgZz8nDwXYQi
 //   Service ID: seu serviço Gmail
 //   Template ID: template com variáveis {{to_email}}, {{subject}}, {{html_content}}
 //   Public Key: sua chave pública
-const EMAILJS_SERVICE_ID  = 'SEU_SERVICE_ID'
-const EMAILJS_TEMPLATE_ID = 'SEU_TEMPLATE_ID'
-const EMAILJS_PUBLIC_KEY  = 'SUA_PUBLIC_KEY'
+const EMAILJS_SERVICE_ID  = 'service_u83t9p7'
+const EMAILJS_TEMPLATE_ID = 'template_tfol1wk'
+const EMAILJS_PUBLIC_KEY  = '49LZL3uELeMKv1gIC'
 
 export function ProcessarEmails() {
   const { sessao, setPagina } = useStore()
