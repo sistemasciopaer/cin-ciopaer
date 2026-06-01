@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useStore } from '@/lib/store'
 import { supabaseAutenticado } from '@/lib/supabase'
 import { normalizarCPF, formatarCPF, validarCPF } from '@/lib/cpf'
@@ -57,43 +57,55 @@ export function NovoAgendamento() {
 
   // ── Estado do formulário ─────────────────────────────────
   const [tipoPessoa, setTipoPessoa]       = useState('SERVIDOR')
-  const [dataSel, setDataSel]             = useState('')
-  const [slots, setSlots]                 = useState([])
-  const [slotSel, setSlotSel]             = useState(null)
-  const [ciente, setCiente]               = useState(false)
+  const [dataSel, setDataSel]              = useState('')
+  const [slots, setSlots]                  = useState([])
+  const [slotSel, setSlotSel]              = useState(null)
+  const [ciente, setCiente]                = useState(false)
 
   // Dependente
-  const [depCPF, setDepCPF]               = useState('')
-  const [depNome, setDepNome]             = useState('')
-  const [depEmail, setDepEmail]           = useState('')
+  const [depCPF, setDepCPF]                = useState('')
+  const [depNome, setDepNome]              = useState('')
+  const [depEmail, setDepEmail]            = useState('')
   const [depParentesco, setDepParentesco] = useState('FILHO')
 
   // UI
   const [carregandoSlots, setCarregandoSlots] = useState(false)
   const [salvando, setSalvando]               = useState(false)
-  const [erro, setErro]                       = useState('')
-  const [sucesso, setSucesso]                 = useState(null) // { nomeAgendado, data, hora }
+  const [erro, setErro]                        = useState('')
+  const [sucesso, setSucesso]                  = useState(null)
   const [errosCampos, setErrosCampos]         = useState({})
 
-  // ── Carregar slots ao escolher data ─────────────────────
-  useEffect(() => {
-    if (!dataSel) return
-    setSlots([])
-    setSlotSel(null)
+  // ── Função isolada para carregar slots ──────────────────
+  const carregarSlots = useCallback(async (dataAlvo) => {
+    if (!dataAlvo) return
     setCarregandoSlots(true)
     setErro('')
 
-    db.from('slots')
+    // Usando range gte/lte para mitigar problemas de timestamptz do Postgres
+    const { data, error } = await db
+      .from('slots')
       .select('id, hora, capacidade, ocupacao_atual')
-      .eq('data', dataSel)
+      .gte('data', `${dataAlvo} 00:00:00`)
+      .lte('data', `${dataAlvo} 23:59:59`)
       .eq('ativo', true)
       .order('hora')
-      .then(({ data, error }) => {
-        setCarregandoSlots(false)
-        if (error) { setErro('Erro ao carregar horários.'); return }
-        setSlots(data ?? [])
-      })
-  }, [dataSel])
+
+    setCarregandoSlots(false)
+    if (error) { 
+      setErro('Erro ao carregar horários.')
+      return 
+    }
+    setSlots(data ?? [])
+  }, [db])
+
+  // Gatilho ao mudar a data
+  useEffect(() => {
+    if (dataSel) {
+      setSlots([])
+      setSlotSel(null)
+      carregarSlots(dataSel)
+    }
+  }, [dataSel, carregarSlots])
 
   // ── Validação ────────────────────────────────────────────
   function validar() {
@@ -124,13 +136,11 @@ export function NovoAgendamento() {
       let nomeAgendado = sessao.nome
       let emailDestino = sessao.email
 
-      // ── Dependente: salvar/buscar ────────────────────────
       if (tipoPessoa === 'DEPENDENTE') {
         cpfAgendado  = normalizarCPF(depCPF)
         nomeAgendado = depNome.trim().toUpperCase()
         emailDestino = depEmail.trim()
 
-        // Verificar se dependente já existe para este servidor
         const { data: depExist } = await db
           .from('dependentes')
           .select('id')
@@ -165,9 +175,9 @@ export function NovoAgendamento() {
       if (reservaErro) throw reservaErro
       if (!reserva) {
         setErro('Este horário foi preenchido agora mesmo. Escolha outro.')
+        setSlotSel(null)
+        await carregarSlots(dataSel) // Recarrega os horários sem quebrar o estado da tela
         setSalvando(false)
-        // Recarregar slots para mostrar disponibilidade atual
-        setDataSel(s => { const v = s; setDataSel(''); setTimeout(() => setDataSel(v), 50); return '' })
         return
       }
 
@@ -192,12 +202,11 @@ export function NovoAgendamento() {
         .single()
 
       if (agErro) {
-        // Slot reservado mas agendamento falhou — liberar vaga
         await db.rpc('liberar_vaga', { p_slot_id: slotSel.id })
         throw agErro
       }
 
-      // ── Auditoria e email (não bloqueantes) ──────────────
+      // ── Auditoria e email ────────────────────────────────
       await registrarAuditoria(sessao.token, {
         operacao:  'CRIAR_AGENDAMENTO',
         objeto:    'AGENDAMENTO',
@@ -223,18 +232,15 @@ export function NovoAgendamento() {
     }
   }
 
-  // ── Tela de sucesso ──────────────────────────────────────
   if (sucesso) {
     return <TelaSucesso sucesso={sucesso} onVoltar={() => setPagina('dashboard')} onNovo={() => setSucesso(null)} />
   }
 
-  // ── Render principal ─────────────────────────────────────
   const slotsDisponiveis = slots.filter(s => s.ocupacao_atual < s.capacidade)
   const slotsCheios      = slots.filter(s => s.ocupacao_atual >= s.capacidade)
 
   return (
     <div style={{ minHeight: '100vh', padding: '32px 20px 60px', maxWidth: 520, margin: '0 auto' }}>
-
       {/* Header */}
       <button onClick={() => setPagina('dashboard')} style={{
         background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)',
@@ -262,7 +268,7 @@ export function NovoAgendamento() {
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           {[
-            { valor: 'SERVIDOR',   label: 'Para mim' },
+            { valor: 'SERVIDOR',   label: 'Para mi' },
             { valor: 'DEPENDENTE', label: 'Para um dependente' },
           ].map(op => (
             <button key={op.valor} onClick={() => { setTipoPessoa(op.valor); setErrosCampos({}) }}
@@ -379,12 +385,11 @@ export function NovoAgendamento() {
           )}
 
           {!carregandoSlots && slots.length === 0 && (
-            <Alerta tipo="info">Nenhum horário disponível para esta data.</Alerta>
+            <Alerta tipo="info">Nenhum horário cadastrado ou disponível para esta data no sistema.</Alerta>
           )}
 
           {!carregandoSlots && slots.length > 0 && (
             <>
-              {/* Slots disponíveis */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: slotsCheios.length ? 16 : 0 }}>
                 {slotsDisponiveis.map(s => {
                   const selecionado = slotSel?.id === s.id
@@ -414,7 +419,6 @@ export function NovoAgendamento() {
                 })}
               </div>
 
-              {/* Slots cheios */}
               {slotsCheios.length > 0 && (
                 <>
                   <p style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.25)',
@@ -439,7 +443,7 @@ export function NovoAgendamento() {
                       </div>
                     ))}
                   </div>
-                </>
+                </                >
               )}
             </>
           )}
@@ -475,7 +479,6 @@ export function NovoAgendamento() {
       {/* Resumo + Botão */}
       {slotSel && (
         <div style={{ marginTop: 8 }}>
-          {/* Resumo */}
           <div style={{
             background: 'rgba(0,128,61,0.08)',
             border: '1px solid rgba(0,128,61,0.2)',
@@ -504,12 +507,10 @@ export function NovoAgendamento() {
   )
 }
 
-// ── Tela de sucesso com QRCode ───────────────────────────────
 function TelaSucesso({ sucesso, onVoltar, onNovo }) {
   const [qrUrl, setQrUrl] = useState('')
 
   useEffect(() => {
-    // Gerar QRCode como imagem via API pública
     const texto = encodeURIComponent(sucesso.qrCode)
     setQrUrl(`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${texto}&bgcolor=0a1628&color=ffffff&margin=10`)
   }, [sucesso.qrCode])
@@ -520,8 +521,6 @@ function TelaSucesso({ sucesso, onVoltar, onNovo }) {
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center',
       justifyContent: 'center', padding: '32px 20px' }}>
       <div style={{ maxWidth: 420, width: '100%', textAlign: 'center' }}>
-
-        {/* Ícone de sucesso */}
         <div style={{
           width: 64, height: 64, borderRadius: '50%',
           background: 'rgba(0,128,61,0.2)',
@@ -539,7 +538,6 @@ function TelaSucesso({ sucesso, onVoltar, onNovo }) {
           {dataLabel} às {sucesso.hora.slice(0, 5)}
         </p>
 
-        {/* QRCode */}
         <div style={{
           background: 'rgba(0,0,0,0.4)',
           border: '1px solid rgba(255,255,255,0.1)',
@@ -574,7 +572,6 @@ function TelaSucesso({ sucesso, onVoltar, onNovo }) {
   )
 }
 
-// ── Template de email ────────────────────────────────────────
 function montarEmailHTML({ nomeAgendado, data, hora, qrCode }) {
   const dataFmt = data === '2026-06-15' ? '15/06/2026' : '16/06/2026'
   return `
