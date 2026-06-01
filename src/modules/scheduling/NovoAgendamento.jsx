@@ -75,37 +75,38 @@ export function NovoAgendamento() {
   const [sucesso, setSucesso]                  = useState(null)
   const [errosCampos, setErrosCampos]         = useState({})
 
-  // ── Função isolada para carregar slots ──────────────────
-  const carregarSlots = useCallback(async (dataAlvo) => {
+  // ── Função para carregar slots (Simplificada para tipo 'date' puro) ──────────────────
+  async function carregarSlots(dataAlvo) {
     if (!dataAlvo) return
     setCarregandoSlots(true)
     setErro('')
 
-    // Usando range gte/lte para mitigar problemas de timestamptz do Postgres
-    const { data, error } = await db
-      .from('slots')
-      .select('id, hora, capacidade, ocupacao_atual')
-      .gte('data', `${dataAlvo} 00:00:00`)
-      .lte('data', `${dataAlvo} 23:59:59`)
-      .eq('ativo', true)
-      .order('hora')
+    try {
+      const { data, error } = await db
+        .from('slots')
+        .select('id, hora, capacidade, ocupacao_atual')
+        .eq('data', dataAlvo) // Como é tipo 'date', a igualdade pura é o ideal
+        .eq('ativo', true)
+        .order('hora')
 
-    setCarregandoSlots(false)
-    if (error) { 
+      if (error) throw error
+      setSlots(data ?? [])
+    } catch (error) {
+      console.error(error)
       setErro('Erro ao carregar horários.')
-      return 
+    } finally {
+      setCarregandoSlots(false)
     }
-    setSlots(data ?? [])
-  }, [db])
+  }
 
-  // Gatilho ao mudar a data
+  // Gatilho controlado: roda APENAS quando o usuário clica e muda a data de fato
   useEffect(() => {
     if (dataSel) {
       setSlots([])
       setSlotSel(null)
       carregarSlots(dataSel)
     }
-  }, [dataSel, carregarSlots])
+  }, [dataSel]) // Apenas dataSel aqui para evitar loops com o objeto 'db'
 
   // ── Validação ────────────────────────────────────────────
   function validar() {
