@@ -24,6 +24,7 @@ function fmtData(d) {
   return `${dia}/${m}/${y}`
 }
 
+// Corrigido também o '&amp;' para '&' padrão para evitar problemas na URL do QR Code
 function qrImageUrl(qrCode) {
   return `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(qrCode)}&bgcolor=111f38&color=ffffff&margin=12`
 }
@@ -308,14 +309,4 @@ function emailCancelamento(ag) {
     </div>
   </div>
 </body></html>`
-}
-
-function fmtData(d) {
-  if (!d) return ''
-  const [y,m,dia] = d.split('-')
-  return `${dia}/${m}/${y}`
-}
-
-function qrImageUrl(qrCode) {
-  return `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(qrCode)}&bgcolor=111f38&color=ffffff&margin=12`
 }
