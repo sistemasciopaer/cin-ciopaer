@@ -1,30 +1,39 @@
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap');
 
 :root {
-  /* Verde CIOPAER */
-  --verde-base:   #00803D;
-  --verde-escuro: #004d2c;
-  --verde-claro:  #00a84f;
-  --verde-dim:    rgba(0,128,61,0.15);
+  /* Verdes */
+  --verde:        #00803D;
+  --verde-escuro: #006830;
+  --verde-claro:  #e8f5ee;
+  --verde-dim:    rgba(0,128,61,0.12);
 
-  /* Neutros */
-  --branco:       #f0ece3;
-  --cinza-claro:  #c8c4bb;
-  --cinza-medio:  #7a7870;
-  --preto-soft:   #0a1a10;
+  /* Laranja */
+  --laranja:      #E8620A;
+  --laranja-claro:#FFF0E6;
+  --laranja-dim:  rgba(232,98,10,0.12);
+
+  /* Neutros claros */
+  --bg:           #F2F4F3;
+  --surface:      #FFFFFF;
+  --surface-2:    #EDF0EE;
+  --borda:        #D6DDD8;
+  --texto:        #1A2E22;
+  --texto-2:      #4A6355;
+  --texto-3:      #7A9588;
 
   /* Feedback */
-  --vermelho:     #c0392b;
-  --amarelo:      #f39c12;
+  --vermelho:     #C0392B;
+  --amarelo:      #E67E22;
 
-  /* Tipografia */
+  /* Tipo */
   --fonte-titulo: 'Syne', sans-serif;
   --fonte-corpo:  'DM Sans', sans-serif;
 
   /* Layout */
-  --raio:     8px;
-  --raio-lg:  14px;
-  --sombra:   0 4px 24px rgba(0,0,0,0.4);
+  --raio:     10px;
+  --raio-lg:  16px;
+  --sombra:   0 2px 12px rgba(0,0,0,0.08);
+  --sombra-lg:0 4px 24px rgba(0,0,0,0.12);
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -32,8 +41,8 @@
 html, body, #root {
   height: 100%;
   font-family: var(--fonte-corpo);
-  background: var(--verde-escuro);
-  color: var(--branco);
+  background: var(--bg);
+  color: var(--texto);
   -webkit-font-smoothing: antialiased;
 }
 
