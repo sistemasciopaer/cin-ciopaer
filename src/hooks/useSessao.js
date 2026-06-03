@@ -2,8 +2,6 @@ import { useEffect, useRef } from 'react'
 import { useStore } from '@/lib/store'
 import { invalidarSessao } from '@/modules/session/sessionRepository'
 
-const TIMEOUT_MS = 30 * 60 * 1000
-
 export function useSessao() {
   const { sessao, clearSessao, setPagina } = useStore()
   const timerRef = useRef(null)
@@ -16,7 +14,10 @@ export function useSessao() {
 
   const resetarTimer = () => {
     clearTimeout(timerRef.current)
-    timerRef.current = setTimeout(logout, TIMEOUT_MS)
+    if (!sessao?.expiraEm) return
+    const restante = new Date(sessao.expiraEm).getTime() - Date.now()
+    if (restante <= 0) { logout(); return }
+    timerRef.current = setTimeout(logout, restante)
   }
 
   useEffect(() => {
