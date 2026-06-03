@@ -28,16 +28,20 @@ export function LoginPage() {
       const { data: servidor, error } = await buscarServidor(matricula, cpf)
       if (error || !servidor) { setErro('Matrícula ou CPF incorretos.'); return }
 
-      const { token, expiraEm } = await criarSessao(servidor.id)
-      const sessao = {
-        token, expiraEm,
+      const perfilId = servidor.perfil_id
+      // Supervisor/Admin = 8h, Servidor = 30min
+      const timeoutMin = perfilId >= 2 ? 480 : 30
+      const { token, expiraEm } = await criarSessao(servidor.id, timeoutMin)
+
+      setSessao({
+        token, expiraEm, perfilId,
         servidorId: servidor.id,
         nome:       servidor.nome,
         email:      servidor.email,
-        perfilId:   servidor.perfil_id,
-      }
-      setSessao(sessao)
-      await registrarAuditoria(token, { operacao: 'LOGIN', objeto: 'SERVIDOR', objetoId: servidor.id })
+      })
+      await registrarAuditoria(token, {
+        operacao: 'LOGIN', objeto: 'SERVIDOR', objetoId: servidor.id
+      })
       setPagina('dashboard')
     } catch {
       setErro('Erro ao conectar. Tente novamente.')
@@ -50,134 +54,65 @@ export function LoginPage() {
 
   return (
     <div style={{
-      minHeight: '100vh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '24px',
-      background: 'linear-gradient(160deg, #002b18 0%, #004d2c 50%, #00622f 100%)',
-      position: 'relative',
-      overflow: 'hidden',
+      minHeight: '100vh', display: 'flex', alignItems: 'center',
+      justifyContent: 'center', padding: '24px',
+      background: 'linear-gradient(160deg, #e8f5ee 0%, #f2f4f3 60%)',
     }}>
+      <div style={{ width: '100%', maxWidth: 400 }}>
 
-      {/* Fundo decorativo */}
-      <div style={{
-        position: 'absolute', inset: 0, pointerEvents: 'none',
-        backgroundImage: `
-          radial-gradient(ellipse 60% 50% at 80% 20%, rgba(0,128,61,0.25) 0%, transparent 70%),
-          radial-gradient(ellipse 40% 40% at 10% 80%, rgba(0,80,40,0.3) 0%, transparent 70%)
-        `
-      }}/>
-      <div style={{
-        position: 'absolute', inset: 0, pointerEvents: 'none',
-        backgroundImage: `
-          linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px)
-        `,
-        backgroundSize: '48px 48px'
-      }}/>
+        {/* Card */}
+        <div style={{
+          background: '#fff', borderRadius: 20, padding: '40px 32px',
+          boxShadow: '0 8px 40px rgba(0,104,48,0.12)',
+          border: '1px solid rgba(0,128,61,0.1)',
+        }}>
+          {/* Brasão */}
+          <div style={{ textAlign: 'center', marginBottom: 28 }}>
+            <img src={BRASAO} alt="CIOPAER"
+              style={{ height: 80, width: 'auto', objectFit: 'contain',
+                filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.12))', marginBottom: 14 }}
+              onError={e => { e.target.style.display = 'none' }} />
+            <h1 style={{ fontFamily: 'var(--fonte-titulo)', fontSize: '1.6rem',
+              fontWeight: 700, color: 'var(--verde)', letterSpacing: '0.08em', marginBottom: 4 }}>
+              CIOPAER
+            </h1>
+            <p style={{ color: 'var(--texto-2)', fontSize: '0.82rem' }}>
+              Agendamento para emissão da CIN
+            </p>
+            <div style={{ width: 40, height: 3, background: 'var(--laranja)',
+              borderRadius: 2, margin: '14px auto 0' }}/>
+          </div>
 
-      {/* Card */}
-      <div style={{
-        width: '100%',
-        maxWidth: 400,
-        background: 'rgba(0,0,0,0.45)',
-        backdropFilter: 'blur(20px)',
-        WebkitBackdropFilter: 'blur(20px)',
-        border: '1px solid rgba(255,255,255,0.1)',
-        borderRadius: 20,
-        padding: '40px 36px',
-        boxShadow: '0 32px 80px rgba(0,0,0,0.5)',
-        position: 'relative',
-        zIndex: 1,
-      }}>
+          {/* Form */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <Campo label="Matrícula" type="text" value={matricula}
+              onChange={e => setMatricula(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleLogin()}
+              placeholder="Sua matrícula" autoComplete="off" autoFocus />
+            <Campo label="CPF" type="text" value={cpf}
+              onChange={e => setCpf(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleLogin()}
+              placeholder="Somente números" maxLength={14} autoComplete="off" />
 
-        {/* Brasão */}
-        <div style={{ textAlign: 'center', marginBottom: 28 }}>
-          <img
-            src={BRASAO}
-            alt="Brasão CIOPAER"
-            style={{
-              height: 90,
-              width: 'auto',
-              objectFit: 'contain',
-              filter: 'drop-shadow(0 4px 16px rgba(0,0,0,0.5))',
-              marginBottom: 16,
-            }}
-            onError={e => { e.target.style.display = 'none' }}
-          />
-          <h1 style={{
-            fontFamily: 'var(--fonte-titulo)',
-            fontSize: '1.5rem',
-            fontWeight: 700,
-            color: '#ffffff',
-            letterSpacing: '0.12em',
-            marginBottom: 6,
-          }}>
-            CIOPAER
-          </h1>
-          <p style={{
-            color: 'rgba(255,255,255,0.55)',
-            fontSize: '0.82rem',
-            letterSpacing: '0.03em',
-          }}>
-            Agendamento para emissão da CIN
-          </p>
+            {erro && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <Alerta tipo="erro">{erro}</Alerta>
+                <a href={linkWA} target="_blank" rel="noreferrer">
+                  <Botao variante="secundario">Falar com o Administrador (WhatsApp)</Botao>
+                </a>
+              </div>
+            )}
 
-          {/* Linha decorativa */}
-          <div style={{
-            width: 48, height: 2,
-            background: '#00803D',
-            margin: '18px auto 0',
-            borderRadius: 2,
-          }}/>
-        </div>
-
-        {/* Formulário */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <Campo
-            label="Matrícula"
-            type="text"
-            value={matricula}
-            onChange={e => setMatricula(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleLogin()}
-            placeholder="Sua matrícula"
-            autoComplete="off"
-            autoFocus
-          />
-          <Campo
-            label="CPF"
-            type="text"
-            value={cpf}
-            onChange={e => setCpf(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleLogin()}
-            placeholder="Somente números"
-            maxLength={14}
-            autoComplete="off"
-          />
-
-          {erro && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <Alerta tipo="erro">{erro}</Alerta>
-              <a href={linkWA} target="_blank" rel="noreferrer">
-                <Botao variante="secundario">
-                  Falar com o Administrador (WhatsApp)
-                </Botao>
-              </a>
+            <div style={{ marginTop: 4 }}>
+              <Botao onClick={handleLogin} carregando={carregando}
+                desabilitado={!matricula || !cpf}>
+                Entrar
+              </Botao>
             </div>
-          )}
-
-          <div style={{ marginTop: 4 }}>
-            <Botao
-              onClick={handleLogin}
-              carregando={carregando}
-              desabilitado={!matricula || !cpf}
-            >
-              Entrar
-            </Botao>
           </div>
         </div>
       </div>
     </div>
   )
 }
+
