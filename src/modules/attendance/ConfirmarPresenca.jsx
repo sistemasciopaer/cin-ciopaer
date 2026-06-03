@@ -14,115 +14,95 @@ function fmtData(d) {
   return `${dia}/${m}/${y}`
 }
 
+const card = {
+  background: '#fff', border: '1.5px solid var(--borda)',
+  borderRadius: 'var(--raio-lg)', padding: '20px',
+  boxShadow: 'var(--sombra)',
+}
+
 export function ConfirmarPresenca() {
   const { sessao, setPagina } = useStore()
   const db = supabaseAutenticado(sessao.token)
 
-  const [aba, setAba]                     = useState('scanner') // scanner | busca
-  const [busca, setBusca]                 = useState('')
-  const [agendamento, setAgendamento]     = useState(null)
-  const [carregando, setCarregando]       = useState(false)
-  const [confirmando, setConfirmando]     = useState(false)
-  const [erro, setErro]                   = useState('')
-  const [sucesso, setSucesso]             = useState('')
-  const [scannerAtivo, setScannerAtivo]   = useState(false)
-  const [codigoManual, setCodigoManual]   = useState('')
-  const scannerRef = useRef(null)
+  const [aba, setAba]               = useState('scanner')
+  const [busca, setBusca]           = useState('')
+  const [codigoManual, setCodigoManual] = useState('')
+  const [agendamento, setAgendamento]   = useState(null)
+  const [multiplos, setMultiplos]       = useState([])
+  const [carregando, setCarregando]     = useState(false)
+  const [confirmando, setConfirmando]   = useState(false)
+  const [desfazendo, setDesfazendo]     = useState(false)
+  const [erro, setErro]                 = useState('')
+  const [sucesso, setSucesso]           = useState('')
+  const [scannerAtivo, setScannerAtivo] = useState(false)
   const html5QrRef = useRef(null)
 
-  // ── Iniciar scanner ──────────────────────────────────────
   useEffect(() => {
-    if (aba !== 'scanner') {
-      pararScanner()
-      return
-    }
-    iniciarScanner()
+    if (aba === 'scanner') iniciarScanner()
+    else pararScanner()
     return () => pararScanner()
   }, [aba])
 
   async function iniciarScanner() {
+    setScannerAtivo(false)
     try {
       const { Html5Qrcode } = await import('html5-qrcode')
-      if (!scannerRef.current) return
-      html5QrRef.current = new Html5Qrcode('qr-reader')
+      const el = document.getElementById('qr-reader-v2')
+      if (!el) return
+      html5QrRef.current = new Html5Qrcode('qr-reader-v2')
       await html5QrRef.current.start(
         { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: 240, height: 240 } },
+        { fps: 10, qrbox: { width: 220, height: 220 } },
         (decoded) => { pararScanner(); buscarPorCodigo(decoded.trim()) },
         () => {}
       )
       setScannerAtivo(true)
-    } catch (e) {
+    } catch {
       setScannerAtivo(false)
-      setErro('Câmera não disponível. Use a busca manual abaixo.')
     }
   }
 
   async function pararScanner() {
-    try {
-      if (html5QrRef.current) {
-        await html5QrRef.current.stop()
-        html5QrRef.current = null
-      }
-    } catch (_) {}
+    try { if (html5QrRef.current) { await html5QrRef.current.stop(); html5QrRef.current = null } } catch {}
     setScannerAtivo(false)
   }
 
-  // ── Buscar agendamento ───────────────────────────────────
   async function buscarPorCodigo(codigo) {
-    setErro(''); setAgendamento(null); setSucesso('')
+    setErro(''); setAgendamento(null); setMultiplos([]); setSucesso('')
     setCarregando(true)
     const { data, error } = await db
       .from('agendamentos')
       .select(`id, nome_agendado, cpf_agendado, tipo_pessoa, status, qr_code, email_destino,
                slot:slots(data, hora),
                responsavel:servidores!servidor_responsavel_id(nome, matricula)`)
-      .eq('qr_code', codigo.trim())
-      .maybeSingle()
+      .eq('qr_code', codigo.trim()).maybeSingle()
     setCarregando(false)
-    if (error || !data) { setErro('Agendamento não encontrado para este código.'); return }
+    if (error || !data) { setErro('QRCode não encontrado.'); return }
     setAgendamento(data)
   }
 
   async function buscarPorTexto() {
     if (!busca.trim()) return
-    setErro(''); setAgendamento(null); setSucesso('')
+    setErro(''); setAgendamento(null); setMultiplos([]); setSucesso('')
     setCarregando(true)
-    const termo = busca.trim()
-    const cpfLimpo = termo.replace(/\D/g, '')
-
-    let query = db
-      .from('agendamentos')
-      .select(`id, nome_agendado, cpf_agendado, tipo_pessoa, status, qr_code, email_destino,
+    const cpfLimpo = busca.replace(/\D/g,'')
+    let q = db.from('agendamentos')
+      .select(`id, nome_agendado, cpf_agendado, tipo_pessoa, status, qr_code,
                slot:slots(data, hora),
                responsavel:servidores!servidor_responsavel_id(nome, matricula)`)
-      .order('criado_em', { ascending: false })
-      .limit(5)
-
-    if (cpfLimpo.length >= 6) {
-      query = query.ilike('cpf_agendado', `%${cpfLimpo}%`)
-    } else {
-      query = query.ilike('nome_agendado', `%${termo}%`)
-    }
-
-    const { data, error } = await query
+      .order('criado_em', { ascending: false }).limit(5)
+    if (cpfLimpo.length >= 6) q = q.ilike('cpf_agendado', `%${cpfLimpo}%`)
+    else                       q = q.ilike('nome_agendado', `%${busca.trim()}%`)
+    const { data, error } = await q
     setCarregando(false)
-    if (error) { setErro('Erro na busca.'); return }
-    if (!data || data.length === 0) { setErro('Nenhum agendamento encontrado.'); return }
-    if (data.length === 1) { setAgendamento(data[0]); return }
-    setAgendamento({ multiplos: data })
+    if (error || !data?.length) { setErro('Nenhum agendamento encontrado.'); return }
+    if (data.length === 1) setAgendamento(data[0])
+    else setMultiplos(data)
   }
 
-  // ── Confirmar presença ───────────────────────────────────
   async function confirmarPresenca() {
-    if (!agendamento?.id) return
+    if (!agendamento?.id || agendamento.status !== 'AGENDADO') return
     setConfirmando(true); setErro('')
-
-    if (agendamento.status !== 'AGENDADO') {
-      setErro(`Este agendamento está com status "${agendamento.status}" e não pode ter presença confirmada.`)
-      setConfirmando(false); return
-    }
-
     try {
       await db.from('presencas').insert({
         agendamento_id: agendamento.id,
@@ -131,192 +111,216 @@ export function ConfirmarPresenca() {
       })
       await db.from('agendamentos').update({ status: 'PRESENTE' }).eq('id', agendamento.id)
       await registrarAuditoria(sessao.token, {
-        operacao: 'CONFIRMAR_PRESENCA', objeto: 'PRESENCA',
-        objetoId: agendamento.id,
-        depois: { metodo: aba === 'scanner' ? 'QRCODE' : 'PESQUISA', confirmadoPor: sessao.servidorId }
+        operacao: 'CONFIRMAR_PRESENCA', objeto: 'PRESENCA', objetoId: agendamento.id,
+        depois: { metodo: aba === 'scanner' ? 'QRCODE' : 'PESQUISA' }
       })
-      setSucesso(`Presença de ${agendamento.nome_agendado} confirmada com sucesso!`)
+      setSucesso(`Presença de ${agendamento.nome_agendado} confirmada!`)
       setAgendamento(null)
-    } catch (e) {
-      setErro(traduzirErro(e))
-    } finally {
-      setConfirmando(false)
-    }
+    } catch (e) { setErro(traduzirErro(e)) }
+    finally { setConfirmando(false) }
+  }
+
+  // DESFAZER presença — volta para AGENDADO
+  async function desfazerPresenca() {
+    if (!agendamento?.id || agendamento.status !== 'PRESENTE') return
+    setDesfazendo(true); setErro('')
+    try {
+      await db.from('presencas').delete().eq('agendamento_id', agendamento.id)
+      await db.from('agendamentos').update({ status: 'AGENDADO' }).eq('id', agendamento.id)
+      await registrarAuditoria(sessao.token, {
+        operacao: 'DESFAZER_PRESENCA', objeto: 'AGENDAMENTO', objetoId: agendamento.id,
+        antes: { status: 'PRESENTE' }, depois: { status: 'AGENDADO' }
+      })
+      setSucesso(`Presença de ${agendamento.nome_agendado} desfeita. Status voltou para AGENDADO.`)
+      setAgendamento(null)
+    } catch (e) { setErro(traduzirErro(e)) }
+    finally { setDesfazendo(false) }
   }
 
   function limpar() {
-    setAgendamento(null); setErro(''); setSucesso('')
+    setAgendamento(null); setMultiplos([]); setErro(''); setSucesso('')
     setBusca(''); setCodigoManual('')
     if (aba === 'scanner') iniciarScanner()
   }
 
   return (
-    <div style={{ minHeight: '100vh', padding: '32px 20px 60px', maxWidth: 520, margin: '0 auto' }}>
-      <button onClick={() => setPagina('dashboard')} style={{
-        background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)',
-        cursor: 'pointer', fontSize: '0.88rem', marginBottom: 24, padding: 0,
-      }}>← Voltar</button>
+    <div style={{ minHeight: '100vh', background: 'var(--bg)', padding: '0 0 60px' }}>
 
-      <h2 style={{ fontFamily: 'var(--fonte-titulo)', fontSize: '1.4rem',
-        fontWeight: 700, color: '#fff', marginBottom: 20 }}>
-        Confirmar Presença
-      </h2>
+      {/* Header verde */}
+      <div style={{ background: 'var(--verde)', padding: '24px 20px 36px' }}>
+        <button onClick={() => setPagina('dashboard')} style={{
+          background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff',
+          borderRadius: 8, padding: '6px 12px', fontSize: '0.82rem',
+          cursor: 'pointer', marginBottom: 16, fontFamily: 'var(--fonte-corpo)',
+        }}>← Voltar</button>
+        <h2 style={{ fontFamily: 'var(--fonte-titulo)', fontSize: '1.3rem',
+          fontWeight: 700, color: '#fff' }}>
+          Confirmar Presença
+        </h2>
+      </div>
 
-      {sucesso && (
-        <div style={{ marginBottom: 20 }}>
-          <Alerta tipo="sucesso">{sucesso}</Alerta>
-          <div style={{ marginTop: 12 }}>
-            <Botao onClick={limpar}>Confirmar outro</Botao>
-          </div>
+      <div style={{ padding: '0 16px', marginTop: -16 }}>
+
+        {/* Abas */}
+        <div style={{ ...card, padding: '6px', marginBottom: 16,
+          display: 'flex', gap: 4 }}>
+          {[
+            { val: 'scanner', label: '📷 Scanner QR' },
+            { val: 'busca',   label: '🔍 Busca' },
+          ].map(a => (
+            <button key={a.val} onClick={() => { setAba(a.val); limpar() }}
+              style={{ flex: 1, padding: '10px', borderRadius: 10,
+                background: aba === a.val ? 'var(--verde)' : 'transparent',
+                color: aba === a.val ? '#fff' : 'var(--texto-2)',
+                fontFamily: 'var(--fonte-corpo)', fontSize: '0.88rem',
+                fontWeight: aba === a.val ? 600 : 400,
+                border: 'none', cursor: 'pointer', transition: 'all 0.15s',
+              }}>
+              {a.label}
+            </button>
+          ))}
         </div>
-      )}
 
-      {!sucesso && (
-        <>
-          {/* Abas */}
-          <div style={{ display: 'flex', gap: 0, marginBottom: 24,
-            background: 'rgba(0,0,0,0.3)', borderRadius: 10, padding: 4 }}>
-            {[
-              { val: 'scanner', label: '📷  Scanner QR' },
-              { val: 'busca',   label: '🔍  Busca manual' },
-            ].map(a => (
-              <button key={a.val} onClick={() => { setAba(a.val); setAgendamento(null); setErro('') }}
-                style={{
-                  flex: 1, padding: '10px', borderRadius: 8,
-                  background: aba === a.val ? 'var(--verde-base)' : 'transparent',
-                  color: aba === a.val ? '#fff' : 'rgba(255,255,255,0.4)',
-                  fontFamily: 'var(--fonte-corpo)', fontSize: '0.85rem',
-                  fontWeight: aba === a.val ? 600 : 400,
-                  border: 'none', cursor: 'pointer', transition: 'all 0.15s',
-                }}>
-                {a.label}
-              </button>
-            ))}
+        {sucesso && (
+          <div style={{ marginBottom: 16 }}>
+            <Alerta tipo="sucesso">{sucesso}</Alerta>
+            <div style={{ marginTop: 10 }}>
+              <Botao variante="verde" onClick={limpar}>Confirmar outro</Botao>
+            </div>
           </div>
+        )}
 
-          {/* Scanner */}
-          {aba === 'scanner' && (
-            <div style={{ marginBottom: 20 }}>
-              <div id="qr-reader" ref={scannerRef} style={{
-                width: '100%', borderRadius: 14, overflow: 'hidden',
-                border: '2px solid rgba(0,128,61,0.3)',
-                background: 'rgba(0,0,0,0.4)', minHeight: 280,
-              }}/>
-              {!scannerAtivo && !carregando && (
-                <div style={{ marginTop: 16 }}>
-                  <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.82rem', marginBottom: 12, textAlign: 'center' }}>
-                    Ou insira o código manualmente:
-                  </p>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <div style={{ flex: 1 }}>
-                      <Campo type="text" value={codigoManual}
-                        onChange={e => setCodigoManual(e.target.value)}
-                        placeholder="QR-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                        onKeyDown={e => e.key === 'Enter' && buscarPorCodigo(codigoManual)} />
+        {!sucesso && (
+          <>
+            {/* Scanner */}
+            {aba === 'scanner' && (
+              <div style={{ ...card, marginBottom: 16 }}>
+                <div id="qr-reader-v2" style={{ width: '100%', borderRadius: 12,
+                  overflow: 'hidden', minHeight: 260,
+                  border: '2px solid var(--verde-claro)',
+                  background: '#f8f8f8' }}/>
+                {!scannerAtivo && (
+                  <div style={{ marginTop: 16 }}>
+                    <p style={{ color: 'var(--texto-3)', fontSize: '0.82rem',
+                      marginBottom: 10, textAlign: 'center' }}>
+                      Câmera indisponível — insira o código manualmente:
+                    </p>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <div style={{ flex: 1 }}>
+                        <Campo type="text" value={codigoManual}
+                          onChange={e => setCodigoManual(e.target.value)}
+                          placeholder="QR-xxxxxxxxxxxxxxxx"
+                          onKeyDown={e => e.key === 'Enter' && buscarPorCodigo(codigoManual)} />
+                      </div>
+                      <button onClick={() => buscarPorCodigo(codigoManual)}
+                        style={{ background: 'var(--laranja)', color: '#fff', border: 'none',
+                          borderRadius: 10, padding: '0 16px', cursor: 'pointer',
+                          fontFamily: 'var(--fonte-corpo)', fontWeight: 600, fontSize: '0.88rem' }}>
+                        Buscar
+                      </button>
                     </div>
-                    <button onClick={() => buscarPorCodigo(codigoManual)}
-                      style={{ background: 'var(--verde-base)', color: '#fff', border: 'none',
-                        borderRadius: 8, padding: '0 16px', cursor: 'pointer', fontFamily: 'var(--fonte-corpo)', fontWeight: 600 }}>
-                      Buscar
-                    </button>
                   </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Busca manual */}
-          {aba === 'busca' && (
-            <div style={{ marginBottom: 20 }}>
-              <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.82rem', marginBottom: 12 }}>
-                Busque por nome ou CPF do agendado:
-              </p>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <div style={{ flex: 1 }}>
-                  <Campo type="text" value={busca}
-                    onChange={e => setBusca(e.target.value)}
-                    placeholder="Nome ou CPF"
-                    onKeyDown={e => e.key === 'Enter' && buscarPorTexto()} />
-                </div>
-                <button onClick={buscarPorTexto}
-                  style={{ background: 'var(--verde-base)', color: '#fff', border: 'none',
-                    borderRadius: 8, padding: '0 16px', cursor: 'pointer',
-                    fontFamily: 'var(--fonte-corpo)', fontWeight: 600 }}>
-                  Buscar
-                </button>
+                )}
               </div>
-            </div>
-          )}
+            )}
 
-          {carregando && (
-            <p style={{ color: 'rgba(255,255,255,0.35)', textAlign: 'center', padding: 20 }}>Buscando...</p>
-          )}
+            {/* Busca manual */}
+            {aba === 'busca' && (
+              <div style={{ ...card, marginBottom: 16 }}>
+                <p style={{ color: 'var(--texto-2)', fontSize: '0.82rem', marginBottom: 12 }}>
+                  Busque por nome ou CPF:
+                </p>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <div style={{ flex: 1 }}>
+                    <Campo type="text" value={busca}
+                      onChange={e => setBusca(e.target.value)}
+                      placeholder="Nome ou CPF"
+                      onKeyDown={e => e.key === 'Enter' && buscarPorTexto()} />
+                  </div>
+                  <button onClick={buscarPorTexto}
+                    style={{ background: 'var(--laranja)', color: '#fff', border: 'none',
+                      borderRadius: 10, padding: '0 18px', cursor: 'pointer',
+                      fontFamily: 'var(--fonte-corpo)', fontWeight: 600, fontSize: '0.88rem' }}>
+                    Buscar
+                  </button>
+                </div>
+              </div>
+            )}
 
-          {erro && <div style={{ marginBottom: 16 }}><Alerta tipo="erro">{erro}</Alerta></div>}
+            {carregando && (
+              <p style={{ color: 'var(--texto-3)', textAlign: 'center', padding: 20 }}>Buscando...</p>
+            )}
 
-          {/* Múltiplos resultados */}
-          {agendamento?.multiplos && (
-            <div>
-              <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.82rem', marginBottom: 12 }}>
-                {agendamento.multiplos.length} resultados — selecione:
-              </p>
-              {agendamento.multiplos.map(ag => (
-                <button key={ag.id} onClick={() => setAgendamento(ag)}
-                  style={{ width: '100%', background: 'rgba(0,0,0,0.3)',
-                    border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10,
-                    padding: '14px 16px', textAlign: 'left', cursor: 'pointer', marginBottom: 8,
-                    fontFamily: 'var(--fonte-corpo)', color: '#fff', }}>
-                  <strong style={{ fontSize: '0.9rem' }}>{ag.nome_agendado}</strong><br/>
-                  <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.78rem' }}>
-                    {formatarCPF(ag.cpf_agendado)} · {ag.slot ? `${fmtData(ag.slot.data)} ${ag.slot.hora?.slice(0,5)}` : '—'}
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
+            {erro && <div style={{ marginBottom: 14 }}><Alerta tipo="erro">{erro}</Alerta></div>}
 
-          {/* Agendamento encontrado */}
-          {agendamento && !agendamento.multiplos && (
-            <div>
-              <div style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)',
-                borderRadius: 14, padding: 20, marginBottom: 16 }}>
-                <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.72rem',
+            {/* Múltiplos */}
+            {multiplos.length > 0 && (
+              <div style={{ ...card, marginBottom: 14 }}>
+                <p style={{ color: 'var(--texto-2)', fontSize: '0.82rem', marginBottom: 12 }}>
+                  {multiplos.length} resultados — selecione:
+                </p>
+                {multiplos.map(ag => (
+                  <button key={ag.id} onClick={() => { setAgendamento(ag); setMultiplos([]) }}
+                    style={{ width: '100%', background: 'var(--bg)',
+                      border: '1.5px solid var(--borda)', borderRadius: 10,
+                      padding: '12px 16px', textAlign: 'left', cursor: 'pointer',
+                      marginBottom: 8, fontFamily: 'var(--fonte-corpo)' }}>
+                    <strong style={{ color: 'var(--texto)', fontSize: '0.9rem' }}>
+                      {ag.nome_agendado}
+                    </strong><br/>
+                    <span style={{ color: 'var(--texto-3)', fontSize: '0.78rem' }}>
+                      {formatarCPF(ag.cpf_agendado)} · {ag.slot ? `${fmtData(ag.slot.data)} ${ag.slot.hora?.slice(0,5)}` : '—'} · {ag.status}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Agendamento encontrado */}
+            {agendamento && !agendamento.multiplos && (
+              <div style={{ ...card, marginBottom: 14 }}>
+                <p style={{ color: 'var(--texto-3)', fontSize: '0.72rem',
                   letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 14 }}>
                   Agendamento localizado
                 </p>
                 {[
-                  ['Nome', agendamento.nome_agendado],
-                  ['CPF', formatarCPF(agendamento.cpf_agendado)],
-                  ['Data', agendamento.slot ? fmtData(agendamento.slot.data) : '—'],
-                  ['Horário', agendamento.slot?.hora?.slice(0,5) ?? '—'],
+                  ['Nome',        agendamento.nome_agendado],
+                  ['CPF',         formatarCPF(agendamento.cpf_agendado)],
+                  ['Data',        agendamento.slot ? fmtData(agendamento.slot.data) : '—'],
+                  ['Horário',     agendamento.slot?.hora?.slice(0,5) ?? '—'],
                   ['Responsável', agendamento.responsavel?.nome ?? '—'],
-                  ['Status', agendamento.status],
+                  ['Status',      agendamento.status],
                 ].map(([k,v]) => (
                   <div key={k} style={{ display: 'flex', justifyContent: 'space-between',
-                    padding: '7px 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                    <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.8rem' }}>{k}</span>
-                    <span style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 500 }}>{v}</span>
+                    padding: '8px 0', borderBottom: '1px solid var(--borda)' }}>
+                    <span style={{ color: 'var(--texto-3)', fontSize: '0.82rem' }}>{k}</span>
+                    <span style={{ color: 'var(--texto)', fontSize: '0.88rem', fontWeight: 500 }}>{v}</span>
                   </div>
                 ))}
-              </div>
 
-              {agendamento.status === 'AGENDADO' ? (
-                <Botao onClick={confirmarPresenca} carregando={confirmando}>
-                  ✓ Confirmar Presença
-                </Botao>
-              ) : (
-                <Alerta tipo="info">
-                  Este agendamento está com status <strong>{agendamento.status}</strong> e não pode ter presença confirmada.
-                </Alerta>
-              )}
-
-              <div style={{ marginTop: 10 }}>
-                <Botao variante="secundario" onClick={limpar}>Limpar</Botao>
+                <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {agendamento.status === 'AGENDADO' && (
+                    <Botao variante="verde" onClick={confirmarPresenca} carregando={confirmando}>
+                      ✓ Confirmar Presença
+                    </Botao>
+                  )}
+                  {agendamento.status === 'PRESENTE' && (
+                    <Botao variante="perigo" onClick={desfazerPresenca} carregando={desfazendo}>
+                      ↩ Desfazer presença (voltar para Agendado)
+                    </Botao>
+                  )}
+                  {!['AGENDADO','PRESENTE'].includes(agendamento.status) && (
+                    <Alerta tipo="aviso">
+                      Status atual: <strong>{agendamento.status}</strong> — não é possível confirmar presença.
+                    </Alerta>
+                  )}
+                  <Botao variante="secundario" onClick={limpar}>Limpar</Botao>
+                </div>
               </div>
-            </div>
-          )}
-        </>
-      )}
+            )}
+          </>
+        )}
+      </div>
     </div>
   )
 }
