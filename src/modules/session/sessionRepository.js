@@ -1,10 +1,7 @@
 import { supabase } from '@/lib/supabase'
 import { gerarToken } from '@/lib/token'
 
-const TIMEOUT_MIN = 30
-
-export async function criarSessao(servidorId) {
-  // Invalida sessões anteriores
+export async function criarSessao(servidorId, timeoutMinutos = 30) {
   await supabase
     .from('sessoes')
     .update({ ativa: false })
@@ -12,7 +9,7 @@ export async function criarSessao(servidorId) {
     .eq('ativa', true)
 
   const token    = gerarToken()
-  const expiraEm = new Date(Date.now() + TIMEOUT_MIN * 60 * 1000).toISOString()
+  const expiraEm = new Date(Date.now() + timeoutMinutos * 60 * 1000).toISOString()
 
   const { error } = await supabase
     .from('sessoes')
@@ -35,8 +32,5 @@ export async function validarSessao(token) {
 }
 
 export async function invalidarSessao(token) {
-  await supabase
-    .from('sessoes')
-    .update({ ativa: false })
-    .eq('token', token)
+  await supabase.from('sessoes').update({ ativa: false }).eq('token', token)
 }
