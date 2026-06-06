@@ -24,16 +24,13 @@ jobs:
       - name: Instalar dependências
         run: npm install
 
-      - name: Verificar variáveis (debug)
+      - name: Criar arquivo .env para build
         run: |
-          echo "URL definida: ${{ secrets.VITE_SUPABASE_URL != '' && 'SIM' || 'NAO' }}"
-          echo "KEY definida: ${{ secrets.VITE_SUPABASE_ANON_KEY != '' && 'SIM' || 'NAO' }}"
+          echo "VITE_SUPABASE_URL=${{ secrets.VITE_SUPABASE_URL }}" >> .env.production
+          echo "VITE_SUPABASE_ANON_KEY=${{ secrets.VITE_SUPABASE_ANON_KEY }}" >> .env.production
 
       - name: Build
         run: npm run build
-        env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v4
