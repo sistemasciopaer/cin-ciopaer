@@ -21,8 +21,8 @@ jobs:
       - name: Build
         run: npm run build
         env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_SUPABASE_URL: ${{ https://injteuofemlklyyyhfqi.supabase.co }}
+          VITE_SUPABASE_ANON_KEY: ${{ eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImluanRldW9mZW1sa2x5eXloZnFpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAxNDUwNDIsImV4cCI6MjA5NTcyMTA0Mn0.8cTHxdMm_9_12zKzDTnfLvZsIVBYuEAAT0Y0bC0kLe4 }}
 
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v4
