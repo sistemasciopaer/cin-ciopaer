@@ -24,6 +24,11 @@ jobs:
       - name: Instalar dependências
         run: npm install
 
+      - name: Verificar variáveis (debug)
+        run: |
+          echo "URL definida: ${{ secrets.VITE_SUPABASE_URL != '' && 'SIM' || 'NAO' }}"
+          echo "KEY definida: ${{ secrets.VITE_SUPABASE_ANON_KEY != '' && 'SIM' || 'NAO' }}"
+
       - name: Build
         run: npm run build
         env:
