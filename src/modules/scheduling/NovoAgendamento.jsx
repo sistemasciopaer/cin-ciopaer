@@ -14,11 +14,10 @@ const DATAS = [
   { valor: '2026-06-16', label: '16 de junho de 2026 (terça-feira)' },
 ]
 
-// Apenas FILHO e CÔNJUGE — genitor removido
 const PARENTESCOS = [
-  { valor: 'FILHO',   label: 'Filho(a)' },
-  { valor: 'CONJUGE', label: 'Cônjuge'  },
-  { valor: 'GENITOR', label: 'Genitor(a)'},
+  { valor: 'FILHO',   label: 'Filho(a)'    },
+  { valor: 'CONJUGE', label: 'Cônjuge'     },
+  { valor: 'GENITOR', label: 'Genitor(a)'  },
 ]
 
 const DOCS_TEXTO = `Conforme o Decreto nº 10.977/2022, é obrigatória a apresentação da certidão original, em meio físico ou digital, emitida pelo cartório competente:
@@ -54,7 +53,6 @@ const secTitle = {
   color: 'var(--texto-2)', margin: 0,
 }
 
-// Estado inicial limpo para dependente
 const DEP_VAZIO = { cpf: '', nome: '', email: '', parentesco: 'FILHO' }
 
 export function NovoAgendamento() {
@@ -74,7 +72,6 @@ export function NovoAgendamento() {
   const [sucesso, setSucesso]       = useState(null)
   const [errosCampos, setErrosCampos] = useState({})
 
-  // Limpar seleção de slot ao mudar data
   useEffect(() => {
     if (!dataSel) return
     setSlots([]); setSlotSel(null); setCarregandoSlots(true); setErro('')
@@ -94,7 +91,7 @@ export function NovoAgendamento() {
     if (!slotSel) erros.slot  = 'Selecione um horário.'
     if (!ciente)  erros.ciente = 'Confirme a ciência da documentação.'
     if (tipoPessoa === 'DEPENDENTE') {
-      if (!validarCPF(dep.cpf))      erros.depCPF   = 'CPF inválido.'
+      if (!validarCPF(dep.cpf))      erros.depCPF  = 'CPF inválido.'
       if (!dep.nome.trim())          erros.depNome  = 'Informe o nome.'
       if (!dep.email.includes('@'))  erros.depEmail = 'Email inválido.'
     }
@@ -117,7 +114,6 @@ export function NovoAgendamento() {
         nomeAgendado = dep.nome.trim().toUpperCase()
         emailDestino = dep.email.trim()
 
-        // Buscar dependente existente ou criar novo
         const { data: depExist } = await db.from('dependentes').select('id')
           .eq('servidor_responsavel_id', sessao.servidorId)
           .eq('cpf', cpfAgendado).maybeSingle()
@@ -136,7 +132,6 @@ export function NovoAgendamento() {
         }
       }
 
-      // Reserva atômica
       const { data: reserva, error: reservaErro } = await db
         .rpc('reservar_vaga', { p_slot_id: slotSel.id })
       if (reservaErro) throw reservaErro
@@ -163,7 +158,6 @@ export function NovoAgendamento() {
       }).select('id').single()
 
       if (agErro) {
-        // Reverter reserva se agendamento falhou
         await db.rpc('liberar_vaga', { p_slot_id: slotSel.id })
         throw agErro
       }
@@ -176,10 +170,9 @@ export function NovoAgendamento() {
       setSucesso({ nomeAgendado, data: dataSel, hora: slotSel.hora, qrCode, tipoPessoa })
 
     } catch (e) {
-      // Traduzir erro de unicidade de forma amigável
       const msg = e?.message ?? ''
       if (msg.includes('servidor_proprio_ativo')) {
-        setErro('Você já possui um agendamento ativo para si mesmo. Cancele-o antes de criar outro.')
+        setErro('Você já possui um agendamento ativo. Cancele-o antes de criar outro.')
       } else if (msg.includes('cpf_ativo')) {
         setErro('Este CPF já possui um agendamento ativo no sistema.')
       } else {
@@ -190,20 +183,13 @@ export function NovoAgendamento() {
     }
   }
 
-  // Após sucesso: se for dependente, limpar campos e permitir novo agendamento
-  // Se for titular, volta para o dashboard
-  function handlePosAgendamento(novoAgendamento) {
-    if (sucesso?.tipoPessoa === 'DEPENDENTE' && novoAgendamento) {
-      // ── LIMPAR TUDO para próximo dependente ──
-      setDep(DEP_VAZIO)
-      setDataSel('')
-      setSlotSel(null)
-      setCiente(false)
-      setErrosCampos({})
-      setSucesso(null)
-    } else {
-      setPagina('dashboard')
-    }
+  function handlePosAgendamento() {
+    setDep(DEP_VAZIO)
+    setDataSel('')
+    setSlotSel(null)
+    setCiente(false)
+    setErrosCampos({})
+    setSucesso(null)
   }
 
   if (sucesso) {
@@ -211,7 +197,7 @@ export function NovoAgendamento() {
       <TelaSucesso
         sucesso={sucesso}
         onVoltar={() => setPagina('dashboard')}
-        onNovoDependent={() => handlePosAgendamento(true)}
+        onNovo={handlePosAgendamento}
       />
     )
   }
@@ -222,7 +208,6 @@ export function NovoAgendamento() {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', padding: '0 0 60px' }}>
 
-      {/* Header */}
       <div style={{ background: 'var(--verde)', padding: '24px 20px 36px' }}>
         <button onClick={() => setPagina('dashboard')} style={{
           background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff',
@@ -287,24 +272,31 @@ export function NovoAgendamento() {
               <Campo label="Email" type="email" value={dep.email}
                 onChange={e => setDep(d => ({ ...d, email: e.target.value }))}
                 placeholder="email@exemplo.com" erro={errosCampos.depEmail} />
+
+              {/* Parentesco — grid com 3 colunas */}
               <div>
                 <label style={{ fontSize: '0.75rem', color: 'var(--texto-2)',
                   letterSpacing: '0.06em', textTransform: 'uppercase',
                   fontWeight: 600, display: 'block', marginBottom: 8 }}>
                   Parentesco
                 </label>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(3, 1fr)',
+                  gap: 8,
+                }}>
                   {PARENTESCOS.map(p => (
                     <button key={p.valor}
                       onClick={() => setDep(d => ({ ...d, parentesco: p.valor }))}
                       style={{
-                        flex: 1, padding: '12px 8px', borderRadius: 10,
+                        padding: '12px 4px', borderRadius: 10,
                         border: `2px solid ${dep.parentesco === p.valor ? 'var(--verde)' : 'var(--borda)'}`,
                         background: dep.parentesco === p.valor ? 'var(--verde-claro)' : '#fff',
                         color: dep.parentesco === p.valor ? 'var(--verde)' : 'var(--texto-2)',
-                        fontFamily: 'var(--fonte-corpo)', fontSize: '0.88rem',
+                        fontFamily: 'var(--fonte-corpo)', fontSize: '0.78rem',
                         fontWeight: dep.parentesco === p.valor ? 700 : 400,
                         cursor: 'pointer', transition: 'all 0.15s',
+                        textAlign: 'center',
                       }}>
                       {p.label}
                     </button>
@@ -360,8 +352,8 @@ export function NovoAgendamento() {
             )}
 
             {!carregandoSlots && slotsDisponiveis.length > 0 && (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8,
-                marginBottom: slotsCheios.length ? 14 : 0 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)',
+                gap: 8, marginBottom: slotsCheios.length ? 14 : 0 }}>
                 {slotsDisponiveis.map(s => {
                   const sel   = slotSel?.id === s.id
                   const vagas = s.capacidade - s.ocupacao_atual
@@ -494,8 +486,7 @@ export function NovoAgendamento() {
   )
 }
 
-// ── Tela de sucesso ──────────────────────────────────────────
-function TelaSucesso({ sucesso, onVoltar, onNovoDependent }) {
+function TelaSucesso({ sucesso, onVoltar, onNovo }) {
   const dataLabel = sucesso.data === '2026-06-15' ? '15/06/2026' : '16/06/2026'
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(sucesso.qrCode)}&bgcolor=ffffff&color=006830&margin=14`
 
@@ -521,7 +512,6 @@ function TelaSucesso({ sucesso, onVoltar, onNovoDependent }) {
           {dataLabel} às {sucesso.hora.slice(0, 5)}
         </p>
 
-        {/* QRCode */}
         <div style={{ background: '#fff', border: '1.5px solid var(--borda)',
           borderRadius: 16, padding: 24, marginBottom: 20,
           display: 'inline-block', boxShadow: 'var(--sombra)' }}>
@@ -541,7 +531,7 @@ function TelaSucesso({ sucesso, onVoltar, onNovoDependent }) {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {sucesso.tipoPessoa === 'DEPENDENTE' && (
-            <Botao variante="verde" onClick={onNovoDependent}>
+            <Botao variante="verde" onClick={onNovo}>
               Agendar outro dependente
             </Botao>
           )}
