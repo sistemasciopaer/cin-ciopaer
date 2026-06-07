@@ -38,6 +38,7 @@ export function LoginPage() {
         servidorId: servidor.id,
         nome:       servidor.nome,
         email:      servidor.email,
+        cpf:        servidor.cpf,
       })
       await registrarAuditoria(token, {
         operacao: 'LOGIN', objeto: 'SERVIDOR', objetoId: servidor.id
