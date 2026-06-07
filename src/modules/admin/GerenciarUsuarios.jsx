@@ -8,25 +8,29 @@ import { Campo } from '@/components/ui/Campo'
 import { Alerta } from '@/components/ui/Alerta'
 
 const PERFIS = { 1: 'Servidor', 2: 'Supervisor', 3: 'Administrador' }
-const card = { background: '#fff', border: '1.5px solid var(--borda)',
-  borderRadius: 'var(--raio-lg)', padding: '20px', boxShadow: 'var(--sombra)' }
+
+const card = {
+  background: '#fff', border: '1.5px solid var(--borda)',
+  borderRadius: 'var(--raio-lg)', padding: '18px',
+  marginBottom: 14, boxShadow: 'var(--sombra)',
+}
+
+const DEP_NOVO = { matricula:'', cpf:'', nome:'', email:'', perfil_id: 1 }
 
 export function GerenciarUsuarios() {
   const { sessao, setPagina } = useStore()
   const db = supabaseAutenticado(sessao.token)
 
-  const [aba, setAba]             = useState('lista')
-  const [servidores, setServidores] = useState([])
-  const [busca, setBusca]         = useState('')
+  const [aba, setAba]               = useState('lista')
+  const [todos, setTodos]           = useState([])       // lista completa
+  const [busca, setBusca]           = useState('')
   const [carregando, setCarregando] = useState(true)
   const [selecionado, setSelecionado] = useState(null)
-  const [salvando, setSalvando]   = useState(false)
-  const [erro, setErro]           = useState('')
-  const [sucesso, setSucesso]     = useState('')
-
-  // Novo servidor
-  const [novo, setNovo] = useState({ matricula:'', cpf:'', nome:'', email:'', perfil_id: 1 })
-  const [errosNovo, setErrosNovo] = useState({})
+  const [salvando, setSalvando]     = useState(false)
+  const [erro, setErro]             = useState('')
+  const [sucesso, setSucesso]       = useState('')
+  const [novo, setNovo]             = useState(DEP_NOVO)
+  const [errosNovo, setErrosNovo]   = useState({})
 
   useEffect(() => { carregar() }, [])
 
@@ -36,14 +40,20 @@ export function GerenciarUsuarios() {
       .select('id, matricula, cpf, nome, email, perfil_id, ativo')
       .order('nome')
     setCarregando(false)
-    setServidores(data ?? [])
+    setTodos(data ?? [])
   }
 
-  const filtrados = servidores.filter(s =>
-    s.nome.toLowerCase().includes(busca.toLowerCase()) ||
-    s.matricula.includes(busca) ||
-    s.cpf.includes(busca.replace(/\D/g,''))
-  )
+  // Filtro aplicado em tempo real sobre a lista já carregada
+  const filtrados = busca.trim() === ''
+    ? todos
+    : todos.filter(s => {
+        const q = busca.toLowerCase().trim()
+        return (
+          s.nome.toLowerCase().includes(q) ||
+          s.matricula.includes(q) ||
+          s.cpf.includes(q.replace(/\D/g,''))
+        )
+      })
 
   async function salvarPerfil() {
     if (!selecionado) return
@@ -52,20 +62,21 @@ export function GerenciarUsuarios() {
       await db.from('servidores')
         .update({ perfil_id: selecionado.perfil_id, ativo: selecionado.ativo })
         .eq('id', selecionado.id)
-      setSucesso('Perfil atualizado com sucesso.')
+      setSucesso(`Perfil de ${selecionado.nome.split(' ')[0]} atualizado.`)
+      setSelecionado(null)
       await carregar()
     } catch (e) { setErro(traduzirErro(e)) }
     finally { setSalvando(false) }
   }
 
   function validarNovo() {
-    const erros = {}
-    if (!novo.matricula.trim()) erros.matricula = 'Obrigatório.'
-    if (!validarCPF(novo.cpf))  erros.cpf       = 'CPF inválido.'
-    if (!novo.nome.trim())      erros.nome      = 'Obrigatório.'
-    if (!novo.email.includes('@')) erros.email  = 'Email inválido.'
-    setErrosNovo(erros)
-    return Object.keys(erros).length === 0
+    const e = {}
+    if (!novo.matricula.trim())    e.matricula = 'Obrigatório.'
+    if (!validarCPF(novo.cpf))     e.cpf       = 'CPF inválido.'
+    if (!novo.nome.trim())         e.nome      = 'Obrigatório.'
+    if (!novo.email.includes('@')) e.email     = 'Email inválido.'
+    setErrosNovo(e)
+    return Object.keys(e).length === 0
   }
 
   async function adicionarServidor() {
@@ -80,8 +91,8 @@ export function GerenciarUsuarios() {
         perfil_id: Number(novo.perfil_id),
         ativo:     true,
       })
-      setSucesso(`${novo.nome} cadastrado com sucesso.`)
-      setNovo({ matricula:'', cpf:'', nome:'', email:'', perfil_id: 1 })
+      setSucesso(`${novo.nome.split(' ')[0]} cadastrado com sucesso.`)
+      setNovo(DEP_NOVO)
       await carregar()
     } catch (e) { setErro(traduzirErro(e)) }
     finally { setSalvando(false) }
@@ -93,9 +104,8 @@ export function GerenciarUsuarios() {
         <button onClick={() => setPagina('admin')} style={{
           background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff',
           borderRadius: 8, padding: '6px 12px', fontSize: '0.82rem',
-          cursor: 'pointer', marginBottom: 16, fontFamily: 'var(--fonte-corpo)' }}>
-          ← Voltar
-        </button>
+          cursor: 'pointer', marginBottom: 16, fontFamily: 'var(--fonte-corpo)',
+        }}>← Voltar</button>
         <h2 style={{ fontFamily: 'var(--fonte-titulo)', fontSize: '1.3rem',
           fontWeight: 700, color: '#fff' }}>
           Gerenciar Usuários
@@ -105,18 +115,18 @@ export function GerenciarUsuarios() {
       <div style={{ padding: '0 16px', marginTop: -16 }}>
 
         {/* Abas */}
-        <div style={{ ...card, padding: '6px', marginBottom: 16, display: 'flex', gap: 4 }}>
+        <div style={{ ...card, padding: '6px', display: 'flex', gap: 4 }}>
           {[
-            { val: 'lista',   label: `👥 Servidores (${servidores.length})` },
-            { val: 'novo',    label: '➕ Adicionar' },
-            { val: 'importar',label: '📥 Importar CSV' },
+            { val: 'lista', label: `👥 Lista (${todos.length})` },
+            { val: 'novo',  label: '➕ Adicionar' },
+            { val: 'csv',   label: '📥 Importar' },
           ].map(a => (
-            <button key={a.val} onClick={() => { setAba(a.val); setErro(''); setSucesso('') }}
-              style={{ flex: 1, padding: '9px 4px', borderRadius: 10,
-                background: aba === a.val ? 'var(--verde)' : 'transparent',
-                color: aba === a.val ? '#fff' : 'var(--texto-2)',
+            <button key={a.val} onClick={() => { setAba(a.val); setErro(''); setSucesso(''); setSelecionado(null) }}
+              style={{ flex: 1, padding: '10px 4px', borderRadius: 10,
+                background: aba===a.val ? 'var(--verde)' : 'transparent',
+                color: aba===a.val ? '#fff' : 'var(--texto-2)',
                 fontFamily: 'var(--fonte-corpo)', fontSize: '0.78rem',
-                fontWeight: aba === a.val ? 600 : 400, border: 'none', cursor: 'pointer' }}>
+                fontWeight: aba===a.val ? 700 : 400, border: 'none', cursor: 'pointer' }}>
               {a.label}
             </button>
           ))}
@@ -130,81 +140,99 @@ export function GerenciarUsuarios() {
           <>
             {selecionado ? (
               <div style={card}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-                  <h3 style={{ color: 'var(--texto)', fontFamily: 'var(--fonte-titulo)', fontSize: '1rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between',
+                  alignItems: 'center', marginBottom: 16 }}>
+                  <p style={{ fontFamily: 'var(--fonte-titulo)', fontWeight: 600,
+                    color: 'var(--texto)', fontSize: '0.95rem' }}>
                     Editar Perfil
-                  </h3>
-                  <button onClick={() => setSelecionado(null)}
-                    style={{ background: 'none', border: 'none', color: 'var(--texto-3)',
-                      cursor: 'pointer', fontSize: '1.2rem' }}>×</button>
+                  </p>
+                  <button onClick={() => setSelecionado(null)} style={{
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    color: 'var(--texto-3)', fontSize: '1.3rem', lineHeight: 1 }}>×</button>
                 </div>
-                <p style={{ fontWeight: 600, color: 'var(--texto)', marginBottom: 4 }}>{selecionado.nome}</p>
+                <p style={{ fontWeight: 600, color: 'var(--texto)', marginBottom: 2 }}>
+                  {selecionado.nome}
+                </p>
                 <p style={{ color: 'var(--texto-3)', fontSize: '0.82rem', marginBottom: 16 }}>
-                  {selecionado.matricula} · {selecionado.email}
+                  Mat. {selecionado.matricula} · {selecionado.email}
                 </p>
                 <div style={{ marginBottom: 14 }}>
                   <label style={{ fontSize: '0.75rem', color: 'var(--texto-2)',
                     letterSpacing: '0.06em', textTransform: 'uppercase',
-                    fontWeight: 600, display: 'block', marginBottom: 6 }}>
-                    Perfil
-                  </label>
+                    fontWeight: 600, display: 'block', marginBottom: 8 }}>Perfil</label>
                   <div style={{ display: 'flex', gap: 8 }}>
                     {Object.entries(PERFIS).map(([id, nome]) => (
-                      <button key={id} onClick={() => setSelecionado(s => ({ ...s, perfil_id: Number(id) }))}
-                        style={{ flex: 1, padding: '10px 6px', borderRadius: 10,
-                          border: `2px solid ${selecionado.perfil_id === Number(id) ? 'var(--verde)' : 'var(--borda)'}`,
-                          background: selecionado.perfil_id === Number(id) ? 'var(--verde-claro)' : '#fff',
-                          color: selecionado.perfil_id === Number(id) ? 'var(--verde)' : 'var(--texto-2)',
-                          fontFamily: 'var(--fonte-corpo)', fontSize: '0.78rem',
-                          fontWeight: selecionado.perfil_id === Number(id) ? 700 : 400,
+                      <button key={id}
+                        onClick={() => setSelecionado(s => ({ ...s, perfil_id: Number(id) }))}
+                        style={{ flex: 1, padding: '10px 4px', borderRadius: 10,
+                          border: `2px solid ${selecionado.perfil_id===Number(id) ? 'var(--verde)' : 'var(--borda)'}`,
+                          background: selecionado.perfil_id===Number(id) ? 'var(--verde-claro)' : '#fff',
+                          color: selecionado.perfil_id===Number(id) ? 'var(--verde)' : 'var(--texto-2)',
+                          fontFamily: 'var(--fonte-corpo)', fontSize: '0.75rem',
+                          fontWeight: selecionado.perfil_id===Number(id) ? 700 : 400,
                           cursor: 'pointer' }}>
                         {nome}
                       </button>
                     ))}
                   </div>
                 </div>
-                <div style={{ marginBottom: 14 }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
-                    <input type="checkbox" checked={selecionado.ativo}
-                      onChange={e => setSelecionado(s => ({ ...s, ativo: e.target.checked }))}
-                      style={{ width: 18, height: 18, accentColor: 'var(--verde)' }} />
-                    <span style={{ color: 'var(--texto-2)', fontSize: '0.88rem' }}>Conta ativa</span>
-                  </label>
-                </div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 10,
+                  cursor: 'pointer', marginBottom: 16 }}>
+                  <input type="checkbox" checked={selecionado.ativo}
+                    onChange={e => setSelecionado(s => ({ ...s, ativo: e.target.checked }))}
+                    style={{ width: 18, height: 18, accentColor: 'var(--verde)' }} />
+                  <span style={{ color: 'var(--texto-2)', fontSize: '0.88rem' }}>Conta ativa</span>
+                </label>
                 <Botao variante="verde" onClick={salvarPerfil} carregando={salvando}>
                   Salvar alterações
                 </Botao>
               </div>
             ) : (
               <>
+                {/* Campo de busca — filtra localmente, sem nova consulta */}
                 <div style={{ marginBottom: 12 }}>
                   <Campo type="text" value={busca}
                     onChange={e => setBusca(e.target.value)}
                     placeholder="Buscar por nome, matrícula ou CPF..." />
                 </div>
+                <p style={{ color: 'var(--texto-3)', fontSize: '0.75rem',
+                  marginBottom: 10, textAlign: 'right' }}>
+                  {filtrados.length} resultado(s)
+                </p>
                 {carregando ? (
-                  <p style={{ color: 'var(--texto-3)', textAlign: 'center', padding: 20 }}>Carregando...</p>
+                  <p style={{ color: 'var(--texto-3)', textAlign: 'center', padding: 20 }}>
+                    Carregando...
+                  </p>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {filtrados.map(s => (
                       <button key={s.id} onClick={() => setSelecionado({ ...s })}
-                        style={{ ...card, padding: '14px 16px', cursor: 'pointer',
-                          textAlign: 'left', width: '100%',
+                        style={{ background: '#fff', border: '1.5px solid var(--borda)',
+                          borderRadius: 'var(--raio-lg)', padding: '14px 16px',
+                          cursor: 'pointer', textAlign: 'left', width: '100%',
                           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                           opacity: s.ativo ? 1 : 0.5,
-                          fontFamily: 'var(--fonte-corpo)',
+                          fontFamily: 'var(--fonte-corpo)', boxShadow: 'var(--sombra)',
                           transition: 'border-color 0.12s' }}
                         onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--verde)'}
                         onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--borda)'}>
                         <div>
-                          <p style={{ fontWeight: 600, color: 'var(--texto)', fontSize: '0.88rem' }}>{s.nome}</p>
+                          <p style={{ fontWeight: 600, color: 'var(--texto)', fontSize: '0.88rem' }}>
+                            {s.nome}
+                          </p>
                           <p style={{ color: 'var(--texto-3)', fontSize: '0.75rem', marginTop: 2 }}>
-                            {s.matricula} · {PERFIS[s.perfil_id]}
+                            Mat. {s.matricula} · {PERFIS[s.perfil_id]}
+                            {!s.ativo && ' · Inativo'}
                           </p>
                         </div>
-                        <span style={{ color: 'var(--texto-3)', fontSize: '0.9rem' }}>›</span>
+                        <span style={{ color: 'var(--texto-3)' }}>›</span>
                       </button>
                     ))}
+                    {filtrados.length === 0 && (
+                      <p style={{ color: 'var(--texto-3)', textAlign: 'center', padding: 20 }}>
+                        Nenhum resultado para "{busca}".
+                      </p>
+                    )}
                   </div>
                 )}
               </>
@@ -215,8 +243,10 @@ export function GerenciarUsuarios() {
         {/* NOVO */}
         {aba === 'novo' && (
           <div style={card}>
-            <h3 style={{ fontFamily: 'var(--fonte-titulo)', color: 'var(--texto)',
-              fontSize: '1rem', marginBottom: 18 }}>Novo Servidor</h3>
+            <p style={{ fontFamily: 'var(--fonte-titulo)', fontWeight: 600,
+              color: 'var(--texto)', fontSize: '0.95rem', marginBottom: 18 }}>
+              Novo Servidor
+            </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <Campo label="Matrícula" type="text" value={novo.matricula}
                 onChange={e => setNovo(n => ({ ...n, matricula: e.target.value }))}
@@ -232,62 +262,64 @@ export function GerenciarUsuarios() {
                 erro={errosNovo.email} />
               <div>
                 <label style={{ fontSize: '0.75rem', color: 'var(--texto-2)',
-                  letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 600,
-                  display: 'block', marginBottom: 6 }}>Perfil</label>
+                  letterSpacing: '0.06em', textTransform: 'uppercase',
+                  fontWeight: 600, display: 'block', marginBottom: 8 }}>Perfil</label>
                 <div style={{ display: 'flex', gap: 8 }}>
                   {Object.entries(PERFIS).map(([id, nome]) => (
-                    <button key={id} onClick={() => setNovo(n => ({ ...n, perfil_id: Number(id) }))}
-                      style={{ flex: 1, padding: '10px 6px', borderRadius: 10,
-                        border: `2px solid ${novo.perfil_id === Number(id) ? 'var(--verde)' : 'var(--borda)'}`,
-                        background: novo.perfil_id === Number(id) ? 'var(--verde-claro)' : '#fff',
-                        color: novo.perfil_id === Number(id) ? 'var(--verde)' : 'var(--texto-2)',
-                        fontFamily: 'var(--fonte-corpo)', fontSize: '0.78rem',
-                        fontWeight: novo.perfil_id === Number(id) ? 700 : 400, cursor: 'pointer' }}>
+                    <button key={id}
+                      onClick={() => setNovo(n => ({ ...n, perfil_id: Number(id) }))}
+                      style={{ flex: 1, padding: '10px 4px', borderRadius: 10,
+                        border: `2px solid ${novo.perfil_id===Number(id) ? 'var(--verde)' : 'var(--borda)'}`,
+                        background: novo.perfil_id===Number(id) ? 'var(--verde-claro)' : '#fff',
+                        color: novo.perfil_id===Number(id) ? 'var(--verde)' : 'var(--texto-2)',
+                        fontFamily: 'var(--fonte-corpo)', fontSize: '0.75rem',
+                        fontWeight: novo.perfil_id===Number(id) ? 700 : 400, cursor: 'pointer' }}>
                       {nome}
                     </button>
                   ))}
                 </div>
               </div>
               <Botao variante="verde" onClick={adicionarServidor} carregando={salvando}>
-                Cadastrar servidor
+                Cadastrar
               </Botao>
             </div>
           </div>
         )}
 
         {/* IMPORTAR CSV */}
-        {aba === 'importar' && <ImportarCSV db={db} onSucesso={() => { carregar(); setSucesso('Importação concluída.') }} />}
+        {aba === 'csv' && (
+          <ImportarCSV db={db} onSucesso={() => { carregar(); setSucesso('Importação concluída.') }} />
+        )}
       </div>
     </div>
   )
 }
 
 function ImportarCSV({ db, onSucesso }) {
-  const [texto, setTexto]       = useState('')
-  const [preview, setPreview]   = useState([])
+  const [texto, setTexto]         = useState('')
+  const [preview, setPreview]     = useState([])
   const [importando, setImportando] = useState(false)
-  const [log, setLog]           = useState([])
-  const [erro, setErro]         = useState('')
+  const [log, setLog]             = useState([])
 
-  const PERFIS_MAP = { 'SERVIDOR': 1, 'SUPERVISOR': 2, 'ADMINISTRADOR': 3 }
+  const PERFIS_MAP = { 'SERVIDOR':1, 'SUPERVISOR':2, 'ADMINISTRADOR':3 }
 
   function parsear() {
-    setErro('')
     const linhas = texto.trim().split('\n').filter(l => l.trim())
-    const resultado = linhas.map((linha, i) => {
+    setPreview(linhas.map((linha, i) => {
       const cols = linha.split(/\t|;/).map(c => c.trim())
       const [matricula='', cpf='', nome='', email='', perfil=''] = cols
-      const erros = []
-      if (!matricula)                erros.push('matrícula ausente')
-      if (cpf.replace(/\D/g,'').length < 10) erros.push('CPF inválido')
-      if (!nome)                     erros.push('nome ausente')
-      if (!perfil || !PERFIS_MAP[perfil.toUpperCase()]) erros.push('perfil inválido')
-      return { matricula, cpf: cpf.replace(/\D/g,'').padStart(11,'0'),
-               nome: nome.toUpperCase(), email, perfil: perfil.toUpperCase(),
-               perfil_id: PERFIS_MAP[perfil.toUpperCase()] ?? 1,
-               valido: erros.length === 0, erros, linha: i+1 }
-    })
-    setPreview(resultado)
+      const errs = []
+      if (!matricula)                  errs.push('matrícula ausente')
+      if (cpf.replace(/\D/g,'').length < 10) errs.push('CPF inválido')
+      if (!nome)                       errs.push('nome ausente')
+      if (!PERFIS_MAP[perfil.toUpperCase()]) errs.push('perfil inválido')
+      return {
+        matricula, cpf: cpf.replace(/\D/g,'').padStart(11,'0'),
+        nome: nome.toUpperCase(), email,
+        perfil_id: PERFIS_MAP[perfil.toUpperCase()] ?? 1,
+        valido: errs.length === 0, errs, linha: i+1,
+      }
+    }))
   }
 
   async function importar() {
@@ -303,34 +335,32 @@ function ImportarCSV({ db, onSucesso }) {
           email: s.email || `sem.email.${s.matricula}@ciopaer.local`,
           perfil_id: s.perfil_id, ativo: true,
         }, { onConflict: 'matricula' })
-        newLog.push({ msg: `✓ ${s.nome}`, tipo: 'ok' })
-        ok++
+        newLog.push({ msg: `✓ ${s.nome}`, tipo: 'ok' }); ok++
       } catch (e) {
-        newLog.push({ msg: `✗ ${s.nome}: ${e.message?.slice(0,60)}`, tipo: 'erro' })
-        fail++
+        newLog.push({ msg: `✗ ${s.nome}: ${e.message?.slice(0,60)}`, tipo: 'erro' }); fail++
       }
     }
     newLog.push({ msg: `─ ${ok} importados, ${fail} erros`, tipo: 'info' })
-    setLog(newLog)
-    setImportando(false)
+    setLog(newLog); setImportando(false)
     if (ok > 0) onSucesso()
   }
 
-  const card = { background: '#fff', border: '1.5px solid var(--borda)',
-    borderRadius: 'var(--raio-lg)', padding: '20px', boxShadow: 'var(--sombra)', marginBottom: 14 }
+  const card2 = { background: '#fff', border: '1.5px solid var(--borda)',
+    borderRadius: 'var(--raio-lg)', padding: '18px',
+    marginBottom: 14, boxShadow: 'var(--sombra)' }
 
   return (
     <div>
-      <div style={card}>
-        <p style={{ color: 'var(--texto-2)', fontSize: '0.82rem', marginBottom: 12, lineHeight: 1.6 }}>
-          Cole os dados da planilha (sem cabeçalho). Colunas separadas por <strong>tab</strong> ou <strong>ponto e vírgula</strong>:<br/>
+      <div style={card2}>
+        <p style={{ color: 'var(--texto-2)', fontSize: '0.82rem', marginBottom: 12, lineHeight: 1.7 }}>
+          Cole os dados sem cabeçalho. Colunas separadas por <strong>tab</strong> ou <strong>ponto e vírgula</strong>:<br/>
           <code style={{ fontSize: '0.75rem', color: 'var(--verde)' }}>
             matricula · cpf · nome · email · perfil
           </code>
         </p>
         <textarea value={texto} onChange={e => setTexto(e.target.value)}
           placeholder={'12345\t00000000000\tFULANO DE TAL\temail@pm.ce.gov.br\tSERVIDOR'}
-          style={{ width: '100%', minHeight: 130, border: '1.5px solid var(--borda)',
+          style={{ width: '100%', minHeight: 120, border: '1.5px solid var(--borda)',
             borderRadius: 10, padding: 12, fontFamily: 'monospace', fontSize: '0.78rem',
             color: 'var(--texto)', background: 'var(--bg)', resize: 'vertical' }} />
         <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
@@ -344,25 +374,26 @@ function ImportarCSV({ db, onSucesso }) {
       </div>
 
       {preview.length > 0 && (
-        <div style={card}>
+        <div style={card2}>
           <p style={{ color: 'var(--texto-2)', fontSize: '0.8rem', marginBottom: 10 }}>
-            {preview.filter(p => p.valido).length} válidos · {preview.filter(p => !p.valido).length} com erro
+            {preview.filter(p=>p.valido).length} válidos ·{' '}
+            {preview.filter(p=>!p.valido).length} com erro
           </p>
-          <div style={{ maxHeight: 280, overflowY: 'auto' }}>
-            {preview.map((p, i) => (
-              <div key={i} style={{ padding: '8px 0', borderBottom: '1px solid var(--borda)',
+          <div style={{ maxHeight: 260, overflowY: 'auto' }}>
+            {preview.map((p,i) => (
+              <div key={i} style={{ padding: '7px 0', borderBottom: '1px solid var(--borda)',
                 display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>
                   <span style={{ fontWeight: 500, color: 'var(--texto)', fontSize: '0.82rem' }}>
                     {p.nome || `Linha ${p.linha}`}
                   </span>
-                  {p.erros.length > 0 && (
+                  {p.errs.length > 0 && (
                     <p style={{ color: 'var(--vermelho)', fontSize: '0.72rem', marginTop: 2 }}>
-                      {p.erros.join(', ')}
+                      {p.errs.join(', ')}
                     </p>
                   )}
                 </div>
-                <span style={{ fontSize: '0.75rem', padding: '2px 8px', borderRadius: 10, marginLeft: 8,
+                <span style={{ fontSize: '0.72rem', padding: '2px 8px', borderRadius: 10, marginLeft: 8,
                   background: p.valido ? 'var(--verde-claro)' : '#fdf2f2',
                   color: p.valido ? 'var(--verde)' : 'var(--vermelho)',
                   border: `1px solid ${p.valido ? 'var(--verde)' : 'var(--vermelho)'}40` }}>
@@ -375,11 +406,11 @@ function ImportarCSV({ db, onSucesso }) {
       )}
 
       {log.length > 0 && (
-        <div style={{ ...card, fontFamily: 'monospace', fontSize: '0.75rem',
-          maxHeight: 200, overflowY: 'auto', lineHeight: 1.8 }}>
-          {log.map((l, i) => (
-            <div key={i} style={{ color: l.tipo === 'ok' ? 'var(--verde)' :
-              l.tipo === 'erro' ? 'var(--vermelho)' : 'var(--texto-3)' }}>
+        <div style={{ ...card2, fontFamily: 'monospace', fontSize: '0.75rem',
+          maxHeight: 180, overflowY: 'auto', lineHeight: 1.8 }}>
+          {log.map((l,i) => (
+            <div key={i} style={{ color: l.tipo==='ok' ? 'var(--verde)' :
+              l.tipo==='erro' ? 'var(--vermelho)' : 'var(--texto-3)' }}>
               {l.msg}
             </div>
           ))}
