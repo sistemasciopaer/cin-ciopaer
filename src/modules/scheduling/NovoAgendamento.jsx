@@ -293,7 +293,7 @@ export function NovoAgendamento() {
                   fontWeight: 600, display: 'block', marginBottom: 8 }}>
                   Parentesco
                 </label>
-                <div style={{ display: 'flex', gap: 10 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
                   {PARENTESCOS.map(p => (
                     <button key={p.valor}
                       onClick={() => setDep(d => ({ ...d, parentesco: p.valor }))}
