@@ -18,6 +18,7 @@ const DATAS = [
 const PARENTESCOS = [
   { valor: 'FILHO',   label: 'Filho(a)' },
   { valor: 'CONJUGE', label: 'Cônjuge'  },
+  { valor: 'GENITOR', label: 'Genitor(a)'},
 ]
 
 const DOCS_TEXTO = `Conforme o Decreto nº 10.977/2022, é obrigatória a apresentação da certidão original, em meio físico ou digital, emitida pelo cartório competente:
