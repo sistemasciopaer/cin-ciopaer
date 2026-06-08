@@ -1,5 +1,4 @@
 import { useStore } from '@/lib/store'
-import { Botao } from '@/components/ui/Botao'
 
 const MENUS = [
   { pagina: 'processar-emails', label: 'Fila de Emails',     icon: '📧',
@@ -20,7 +19,9 @@ export function Admin() {
           background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff',
           borderRadius: 8, padding: '6px 12px', fontSize: '0.82rem',
           cursor: 'pointer', marginBottom: 16, fontFamily: 'var(--fonte-corpo)',
-        }}>← Voltar</button>
+        }}>
+          {String.fromCharCode(8592)} Voltar
+        </button>
         <h2 style={{ fontFamily: 'var(--fonte-titulo)', fontSize: '1.3rem',
           fontWeight: 700, color: '#fff', marginBottom: 4 }}>
           Administração
@@ -53,27 +54,27 @@ export function Admin() {
                 e.currentTarget.style.boxShadow   = 'var(--sombra)'
                 e.currentTarget.style.borderColor = 'var(--borda)'
               }}>
-              <div style={{ width: 46, height: 46, borderRadius: 12, flexShrink: 0,
+              <div style={{
+                width: 46, height: 46, borderRadius: 12, flexShrink: 0,
                 background: m.cor === 'var(--laranja)' ? 'var(--laranja-claro)' : 'var(--verde-claro)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '1.3rem' }}>
+                fontSize: '1.3rem',
+              }}>
                 {m.icon}
               </div>
               <div style={{ flex: 1 }}>
-                <p style={{ color: 'var(--texto)', fontWeight: 600, fontSize: '0.95rem', marginBottom: 2 }}>
+                <p style={{ color: 'var(--texto)', fontWeight: 600,
+                  fontSize: '0.95rem', marginBottom: 2 }}>
                   {m.label}
                 </p>
-                <p style={{ color: 'var(--texto-3)', fontSize: '0.78rem' }}>{m.desc}</p>
+                <p style={{ color: 'var(--texto-3)', fontSize: '0.78rem' }}>
+                  {m.desc}
+                </p>
               </div>
               <span style={{ color: 'var(--texto-3)', fontSize: '1rem' }}>›</span>
             </button>
           ))}
         </div>
-      </div>
-    </div>
-  )
-}
-
       </div>
     </div>
   )
