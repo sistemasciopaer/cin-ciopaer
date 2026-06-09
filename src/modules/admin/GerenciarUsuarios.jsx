@@ -8,6 +8,7 @@ import { Campo } from '@/components/ui/Campo'
 import { Alerta } from '@/components/ui/Alerta'
 
 const PERFIS = { 1: 'Servidor', 2: 'Supervisor', 3: 'Administrador' }
+const DEP_NOVO = { matricula:'', cpf:'', nome:'', email:'', perfil_id: 1 }
 
 const card = {
   background: '#fff', border: '1.5px solid var(--borda)',
@@ -15,14 +16,12 @@ const card = {
   marginBottom: 14, boxShadow: 'var(--sombra)',
 }
 
-const DEP_NOVO = { matricula:'', cpf:'', nome:'', email:'', perfil_id: 1 }
-
 export function GerenciarUsuarios() {
   const { sessao, setPagina } = useStore()
   const db = supabaseAutenticado(sessao.token)
 
   const [aba, setAba]               = useState('lista')
-  const [todos, setTodos]           = useState([])       // lista completa
+  const [todos, setTodos]           = useState([])
   const [busca, setBusca]           = useState('')
   const [carregando, setCarregando] = useState(true)
   const [selecionado, setSelecionado] = useState(null)
@@ -36,14 +35,15 @@ export function GerenciarUsuarios() {
 
   async function carregar() {
     setCarregando(true)
-    const { data } = await db.from('servidores')
+    const { data, error } = await db
+      .from('servidores')
       .select('id, matricula, cpf, nome, email, perfil_id, ativo')
       .order('nome')
     setCarregando(false)
+    if (error) { setErro('Erro ao carregar servidores.'); return }
     setTodos(data ?? [])
   }
 
-  // Filtro aplicado em tempo real sobre a lista já carregada
   const filtrados = busca.trim() === ''
     ? todos
     : todos.filter(s => {
@@ -51,7 +51,7 @@ export function GerenciarUsuarios() {
         return (
           s.nome.toLowerCase().includes(q) ||
           s.matricula.includes(q) ||
-          s.cpf.includes(q.replace(/\D/g,''))
+          s.cpf.includes(q.replace(/\D/g, ''))
         )
       })
 
@@ -59,10 +59,15 @@ export function GerenciarUsuarios() {
     if (!selecionado) return
     setSalvando(true); setErro(''); setSucesso('')
     try {
-      await db.from('servidores')
-        .update({ perfil_id: selecionado.perfil_id, ativo: selecionado.ativo })
+      const { error } = await db
+        .from('servidores')
+        .update({
+          perfil_id: Number(selecionado.perfil_id),
+          ativo:     selecionado.ativo,
+        })
         .eq('id', selecionado.id)
-      setSucesso(`Perfil de ${selecionado.nome.split(' ')[0]} atualizado.`)
+      if (error) throw error
+      setSucesso(`Perfil de ${selecionado.nome.split(' ')[0]} atualizado com sucesso.`)
       setSelecionado(null)
       await carregar()
     } catch (e) { setErro(traduzirErro(e)) }
@@ -83,7 +88,7 @@ export function GerenciarUsuarios() {
     if (!validarNovo()) return
     setSalvando(true); setErro(''); setSucesso('')
     try {
-      await db.from('servidores').insert({
+      const { error } = await db.from('servidores').insert({
         matricula: novo.matricula.trim(),
         cpf:       normalizarCPF(novo.cpf),
         nome:      novo.nome.trim().toUpperCase(),
@@ -91,148 +96,144 @@ export function GerenciarUsuarios() {
         perfil_id: Number(novo.perfil_id),
         ativo:     true,
       })
+      if (error) throw error
       setSucesso(`${novo.nome.split(' ')[0]} cadastrado com sucesso.`)
       setNovo(DEP_NOVO)
+      setErrosNovo({})
       await carregar()
     } catch (e) { setErro(traduzirErro(e)) }
     finally { setSalvando(false) }
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)', padding: '0 0 60px' }}>
-      <div style={{ background: 'var(--verde)', padding: '24px 20px 36px' }}>
+    <div style={{ minHeight:'100vh', background:'var(--bg)', padding:'0 0 60px' }}>
+      <div style={{ background:'var(--verde)', padding:'24px 20px 36px' }}>
         <button onClick={() => setPagina('admin')} style={{
-          background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff',
-          borderRadius: 8, padding: '6px 12px', fontSize: '0.82rem',
-          cursor: 'pointer', marginBottom: 16, fontFamily: 'var(--fonte-corpo)',
-        }}>← Voltar</button>
-        <h2 style={{ fontFamily: 'var(--fonte-titulo)', fontSize: '1.3rem',
-          fontWeight: 700, color: '#fff' }}>
-          Gerenciar Usuários
-        </h2>
+          background:'rgba(255,255,255,0.2)', border:'none', color:'#fff',
+          borderRadius:8, padding:'6px 12px', fontSize:'0.82rem',
+          cursor:'pointer', marginBottom:16, fontFamily:'var(--fonte-corpo)',
+        }}>{String.fromCharCode(8592)} Voltar</button>
+        <h2 style={{ fontFamily:'var(--fonte-titulo)', fontSize:'1.3rem',
+          fontWeight:700, color:'#fff' }}>Gerenciar Usuários</h2>
       </div>
 
-      <div style={{ padding: '0 16px', marginTop: -16 }}>
+      <div style={{ padding:'0 16px', marginTop:-16 }}>
 
         {/* Abas */}
-        <div style={{ ...card, padding: '6px', display: 'flex', gap: 4 }}>
+        <div style={{ ...card, padding:'6px', display:'flex', gap:4 }}>
           {[
-            { val: 'lista', label: `👥 Lista (${todos.length})` },
-            { val: 'novo',  label: '➕ Adicionar' },
-            { val: 'csv',   label: '📥 Importar' },
+            { val:'lista', label:`👥 Lista (${todos.length})` },
+            { val:'novo',  label:'➕ Adicionar' },
+            { val:'csv',   label:'📥 Importar' },
           ].map(a => (
-            <button key={a.val} onClick={() => { setAba(a.val); setErro(''); setSucesso(''); setSelecionado(null) }}
-              style={{ flex: 1, padding: '10px 4px', borderRadius: 10,
+            <button key={a.val}
+              onClick={() => { setAba(a.val); setErro(''); setSucesso(''); setSelecionado(null) }}
+              style={{ flex:1, padding:'10px 4px', borderRadius:10,
                 background: aba===a.val ? 'var(--verde)' : 'transparent',
                 color: aba===a.val ? '#fff' : 'var(--texto-2)',
-                fontFamily: 'var(--fonte-corpo)', fontSize: '0.78rem',
-                fontWeight: aba===a.val ? 700 : 400, border: 'none', cursor: 'pointer' }}>
+                fontFamily:'var(--fonte-corpo)', fontSize:'0.78rem',
+                fontWeight: aba===a.val ? 700 : 400, border:'none', cursor:'pointer' }}>
               {a.label}
             </button>
           ))}
         </div>
 
-        {erro    && <div style={{ marginBottom: 14 }}><Alerta tipo="erro">{erro}</Alerta></div>}
-        {sucesso && <div style={{ marginBottom: 14 }}><Alerta tipo="sucesso">{sucesso}</Alerta></div>}
+        {erro    && <div style={{ marginBottom:14 }}><Alerta tipo="erro">{erro}</Alerta></div>}
+        {sucesso && <div style={{ marginBottom:14 }}><Alerta tipo="sucesso">{sucesso}</Alerta></div>}
 
         {/* LISTA */}
         {aba === 'lista' && (
           <>
             {selecionado ? (
               <div style={card}>
-                <div style={{ display: 'flex', justifyContent: 'space-between',
-                  alignItems: 'center', marginBottom: 16 }}>
-                  <p style={{ fontFamily: 'var(--fonte-titulo)', fontWeight: 600,
-                    color: 'var(--texto)', fontSize: '0.95rem' }}>
-                    Editar Perfil
-                  </p>
-                  <button onClick={() => setSelecionado(null)} style={{
-                    background: 'none', border: 'none', cursor: 'pointer',
-                    color: 'var(--texto-3)', fontSize: '1.3rem', lineHeight: 1 }}>×</button>
+                <div style={{ display:'flex', justifyContent:'space-between',
+                  alignItems:'center', marginBottom:16 }}>
+                  <p style={{ fontFamily:'var(--fonte-titulo)', fontWeight:600,
+                    color:'var(--texto)', fontSize:'0.95rem' }}>Editar Perfil</p>
+                  <button onClick={() => { setSelecionado(null); setErro(''); setSucesso('') }}
+                    style={{ background:'none', border:'none', cursor:'pointer',
+                      color:'var(--texto-3)', fontSize:'1.3rem', lineHeight:1 }}>×</button>
                 </div>
-                <p style={{ fontWeight: 600, color: 'var(--texto)', marginBottom: 2 }}>
+                <p style={{ fontWeight:600, color:'var(--texto)', marginBottom:2 }}>
                   {selecionado.nome}
                 </p>
-                <p style={{ color: 'var(--texto-3)', fontSize: '0.82rem', marginBottom: 16 }}>
+                <p style={{ color:'var(--texto-3)', fontSize:'0.82rem', marginBottom:16 }}>
                   Mat. {selecionado.matricula} · {selecionado.email}
                 </p>
-                <div style={{ marginBottom: 14 }}>
-                  <label style={{ fontSize: '0.75rem', color: 'var(--texto-2)',
-                    letterSpacing: '0.06em', textTransform: 'uppercase',
-                    fontWeight: 600, display: 'block', marginBottom: 8 }}>Perfil</label>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    {Object.entries(PERFIS).map(([id, nome]) => (
-                      <button key={id}
-                        onClick={() => setSelecionado(s => ({ ...s, perfil_id: Number(id) }))}
-                        style={{ flex: 1, padding: '10px 4px', borderRadius: 10,
-                          border: `2px solid ${selecionado.perfil_id===Number(id) ? 'var(--verde)' : 'var(--borda)'}`,
-                          background: selecionado.perfil_id===Number(id) ? 'var(--verde-claro)' : '#fff',
-                          color: selecionado.perfil_id===Number(id) ? 'var(--verde)' : 'var(--texto-2)',
-                          fontFamily: 'var(--fonte-corpo)', fontSize: '0.75rem',
-                          fontWeight: selecionado.perfil_id===Number(id) ? 700 : 400,
-                          cursor: 'pointer' }}>
-                        {nome}
-                      </button>
-                    ))}
-                  </div>
+
+                <label style={{ fontSize:'0.75rem', color:'var(--texto-2)',
+                  letterSpacing:'0.06em', textTransform:'uppercase',
+                  fontWeight:600, display:'block', marginBottom:8 }}>Perfil</label>
+                <div style={{ display:'flex', gap:8, marginBottom:16 }}>
+                  {Object.entries(PERFIS).map(([id, nome]) => (
+                    <button key={id}
+                      onClick={() => setSelecionado(s => ({ ...s, perfil_id: Number(id) }))}
+                      style={{ flex:1, padding:'10px 4px', borderRadius:10,
+                        border:`2px solid ${selecionado.perfil_id===Number(id) ? 'var(--verde)' : 'var(--borda)'}`,
+                        background: selecionado.perfil_id===Number(id) ? 'var(--verde-claro)' : '#fff',
+                        color: selecionado.perfil_id===Number(id) ? 'var(--verde)' : 'var(--texto-2)',
+                        fontFamily:'var(--fonte-corpo)', fontSize:'0.75rem',
+                        fontWeight: selecionado.perfil_id===Number(id) ? 700 : 400,
+                        cursor:'pointer' }}>
+                      {nome}
+                    </button>
+                  ))}
                 </div>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 10,
-                  cursor: 'pointer', marginBottom: 16 }}>
+
+                <label style={{ display:'flex', alignItems:'center', gap:10,
+                  cursor:'pointer', marginBottom:16 }}>
                   <input type="checkbox" checked={selecionado.ativo}
                     onChange={e => setSelecionado(s => ({ ...s, ativo: e.target.checked }))}
-                    style={{ width: 18, height: 18, accentColor: 'var(--verde)' }} />
-                  <span style={{ color: 'var(--texto-2)', fontSize: '0.88rem' }}>Conta ativa</span>
+                    style={{ width:18, height:18, accentColor:'var(--verde)' }} />
+                  <span style={{ color:'var(--texto-2)', fontSize:'0.88rem' }}>Conta ativa</span>
                 </label>
+
                 <Botao variante="verde" onClick={salvarPerfil} carregando={salvando}>
                   Salvar alterações
                 </Botao>
               </div>
             ) : (
               <>
-                {/* Campo de busca — filtra localmente, sem nova consulta */}
-                <div style={{ marginBottom: 12 }}>
+                <div style={{ marginBottom:12 }}>
                   <Campo type="text" value={busca}
                     onChange={e => setBusca(e.target.value)}
                     placeholder="Buscar por nome, matrícula ou CPF..." />
                 </div>
-                <p style={{ color: 'var(--texto-3)', fontSize: '0.75rem',
-                  marginBottom: 10, textAlign: 'right' }}>
+                <p style={{ color:'var(--texto-3)', fontSize:'0.75rem',
+                  marginBottom:10, textAlign:'right' }}>
                   {filtrados.length} resultado(s)
                 </p>
                 {carregando ? (
-                  <p style={{ color: 'var(--texto-3)', textAlign: 'center', padding: 20 }}>
-                    Carregando...
+                  <p style={{ color:'var(--texto-3)', textAlign:'center', padding:20 }}>Carregando...</p>
+                ) : filtrados.length === 0 ? (
+                  <p style={{ color:'var(--texto-3)', textAlign:'center', padding:20 }}>
+                    {busca ? `Nenhum resultado para "${busca}".` : 'Nenhum servidor cadastrado.'}
                   </p>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
                     {filtrados.map(s => (
-                      <button key={s.id} onClick={() => setSelecionado({ ...s })}
-                        style={{ background: '#fff', border: '1.5px solid var(--borda)',
-                          borderRadius: 'var(--raio-lg)', padding: '14px 16px',
-                          cursor: 'pointer', textAlign: 'left', width: '100%',
-                          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      <button key={s.id} onClick={() => { setSelecionado({ ...s }); setErro(''); setSucesso('') }}
+                        style={{ background:'#fff', border:'1.5px solid var(--borda)',
+                          borderRadius:'var(--raio-lg)', padding:'14px 16px',
+                          cursor:'pointer', textAlign:'left', width:'100%',
+                          display:'flex', justifyContent:'space-between', alignItems:'center',
                           opacity: s.ativo ? 1 : 0.5,
-                          fontFamily: 'var(--fonte-corpo)', boxShadow: 'var(--sombra)',
-                          transition: 'border-color 0.12s' }}
+                          fontFamily:'var(--fonte-corpo)', boxShadow:'var(--sombra)',
+                          transition:'border-color 0.12s' }}
                         onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--verde)'}
                         onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--borda)'}>
                         <div>
-                          <p style={{ fontWeight: 600, color: 'var(--texto)', fontSize: '0.88rem' }}>
+                          <p style={{ fontWeight:600, color:'var(--texto)', fontSize:'0.88rem' }}>
                             {s.nome}
                           </p>
-                          <p style={{ color: 'var(--texto-3)', fontSize: '0.75rem', marginTop: 2 }}>
+                          <p style={{ color:'var(--texto-3)', fontSize:'0.75rem', marginTop:2 }}>
                             Mat. {s.matricula} · {PERFIS[s.perfil_id]}
                             {!s.ativo && ' · Inativo'}
                           </p>
                         </div>
-                        <span style={{ color: 'var(--texto-3)' }}>›</span>
+                        <span style={{ color:'var(--texto-3)' }}>›</span>
                       </button>
                     ))}
-                    {filtrados.length === 0 && (
-                      <p style={{ color: 'var(--texto-3)', textAlign: 'center', padding: 20 }}>
-                        Nenhum resultado para "{busca}".
-                      </p>
-                    )}
                   </div>
                 )}
               </>
@@ -243,11 +244,11 @@ export function GerenciarUsuarios() {
         {/* NOVO */}
         {aba === 'novo' && (
           <div style={card}>
-            <p style={{ fontFamily: 'var(--fonte-titulo)', fontWeight: 600,
-              color: 'var(--texto)', fontSize: '0.95rem', marginBottom: 18 }}>
+            <p style={{ fontFamily:'var(--fonte-titulo)', fontWeight:600,
+              color:'var(--texto)', fontSize:'0.95rem', marginBottom:18 }}>
               Novo Servidor
             </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
               <Campo label="Matrícula" type="text" value={novo.matricula}
                 onChange={e => setNovo(n => ({ ...n, matricula: e.target.value }))}
                 erro={errosNovo.matricula} />
@@ -261,19 +262,20 @@ export function GerenciarUsuarios() {
                 onChange={e => setNovo(n => ({ ...n, email: e.target.value }))}
                 erro={errosNovo.email} />
               <div>
-                <label style={{ fontSize: '0.75rem', color: 'var(--texto-2)',
-                  letterSpacing: '0.06em', textTransform: 'uppercase',
-                  fontWeight: 600, display: 'block', marginBottom: 8 }}>Perfil</label>
-                <div style={{ display: 'flex', gap: 8 }}>
+                <label style={{ fontSize:'0.75rem', color:'var(--texto-2)',
+                  letterSpacing:'0.06em', textTransform:'uppercase',
+                  fontWeight:600, display:'block', marginBottom:8 }}>Perfil</label>
+                <div style={{ display:'flex', gap:8 }}>
                   {Object.entries(PERFIS).map(([id, nome]) => (
                     <button key={id}
                       onClick={() => setNovo(n => ({ ...n, perfil_id: Number(id) }))}
-                      style={{ flex: 1, padding: '10px 4px', borderRadius: 10,
-                        border: `2px solid ${novo.perfil_id===Number(id) ? 'var(--verde)' : 'var(--borda)'}`,
+                      style={{ flex:1, padding:'10px 4px', borderRadius:10,
+                        border:`2px solid ${novo.perfil_id===Number(id) ? 'var(--verde)' : 'var(--borda)'}`,
                         background: novo.perfil_id===Number(id) ? 'var(--verde-claro)' : '#fff',
                         color: novo.perfil_id===Number(id) ? 'var(--verde)' : 'var(--texto-2)',
-                        fontFamily: 'var(--fonte-corpo)', fontSize: '0.75rem',
-                        fontWeight: novo.perfil_id===Number(id) ? 700 : 400, cursor: 'pointer' }}>
+                        fontFamily:'var(--fonte-corpo)', fontSize:'0.75rem',
+                        fontWeight: novo.perfil_id===Number(id) ? 700 : 400,
+                        cursor:'pointer' }}>
                       {nome}
                     </button>
                   ))}
@@ -286,7 +288,7 @@ export function GerenciarUsuarios() {
           </div>
         )}
 
-        {/* IMPORTAR CSV */}
+        {/* IMPORTAR */}
         {aba === 'csv' && (
           <ImportarCSV db={db} onSucesso={() => { carregar(); setSucesso('Importação concluída.') }} />
         )}
@@ -296,10 +298,10 @@ export function GerenciarUsuarios() {
 }
 
 function ImportarCSV({ db, onSucesso }) {
-  const [texto, setTexto]         = useState('')
-  const [preview, setPreview]     = useState([])
+  const [texto, setTexto]           = useState('')
+  const [preview, setPreview]       = useState([])
   const [importando, setImportando] = useState(false)
-  const [log, setLog]             = useState([])
+  const [log, setLog]               = useState([])
 
   const PERFIS_MAP = { 'SERVIDOR':1, 'SUPERVISOR':2, 'ADMINISTRADOR':3 }
 
@@ -309,15 +311,15 @@ function ImportarCSV({ db, onSucesso }) {
       const cols = linha.split(/\t|;/).map(c => c.trim())
       const [matricula='', cpf='', nome='', email='', perfil=''] = cols
       const errs = []
-      if (!matricula)                  errs.push('matrícula ausente')
-      if (cpf.replace(/\D/g,'').length < 10) errs.push('CPF inválido')
-      if (!nome)                       errs.push('nome ausente')
-      if (!PERFIS_MAP[perfil.toUpperCase()]) errs.push('perfil inválido')
+      if (!matricula)                         errs.push('matrícula ausente')
+      if (cpf.replace(/\D/g,'').length < 10)  errs.push('CPF inválido')
+      if (!nome)                              errs.push('nome ausente')
+      if (!PERFIS_MAP[perfil.toUpperCase()])  errs.push('perfil inválido')
       return {
         matricula, cpf: cpf.replace(/\D/g,'').padStart(11,'0'),
         nome: nome.toUpperCase(), email,
         perfil_id: PERFIS_MAP[perfil.toUpperCase()] ?? 1,
-        valido: errs.length === 0, errs, linha: i+1,
+        valido: errs.length === 0, errs, linha: i + 1,
       }
     }))
   }
@@ -330,11 +332,12 @@ function ImportarCSV({ db, onSucesso }) {
     let ok = 0, fail = 0
     for (const s of validos) {
       try {
-        await db.from('servidores').upsert({
+        const { error } = await db.from('servidores').upsert({
           matricula: s.matricula, cpf: s.cpf, nome: s.nome,
           email: s.email || `sem.email.${s.matricula}@ciopaer.local`,
           perfil_id: s.perfil_id, ativo: true,
         }, { onConflict: 'matricula' })
+        if (error) throw error
         newLog.push({ msg: `✓ ${s.nome}`, tipo: 'ok' }); ok++
       } catch (e) {
         newLog.push({ msg: `✗ ${s.nome}: ${e.message?.slice(0,60)}`, tipo: 'erro' }); fail++
@@ -345,25 +348,24 @@ function ImportarCSV({ db, onSucesso }) {
     if (ok > 0) onSucesso()
   }
 
-  const card2 = { background: '#fff', border: '1.5px solid var(--borda)',
-    borderRadius: 'var(--raio-lg)', padding: '18px',
-    marginBottom: 14, boxShadow: 'var(--sombra)' }
+  const card2 = { background:'#fff', border:'1.5px solid var(--borda)',
+    borderRadius:'var(--raio-lg)', padding:'18px', marginBottom:14, boxShadow:'var(--sombra)' }
 
   return (
     <div>
       <div style={card2}>
-        <p style={{ color: 'var(--texto-2)', fontSize: '0.82rem', marginBottom: 12, lineHeight: 1.7 }}>
-          Cole os dados sem cabeçalho. Colunas separadas por <strong>tab</strong> ou <strong>ponto e vírgula</strong>:<br/>
-          <code style={{ fontSize: '0.75rem', color: 'var(--verde)' }}>
+        <p style={{ color:'var(--texto-2)', fontSize:'0.82rem', marginBottom:12, lineHeight:1.7 }}>
+          Cole os dados sem cabeçalho. Colunas por <strong>tab</strong> ou <strong>ponto e vírgula</strong>:<br/>
+          <code style={{ fontSize:'0.75rem', color:'var(--verde)' }}>
             matricula · cpf · nome · email · perfil
           </code>
         </p>
         <textarea value={texto} onChange={e => setTexto(e.target.value)}
-          placeholder={'12345\t00000000000\tFULANO DE TAL\temail@pm.ce.gov.br\tSERVIDOR'}
-          style={{ width: '100%', minHeight: 120, border: '1.5px solid var(--borda)',
-            borderRadius: 10, padding: 12, fontFamily: 'monospace', fontSize: '0.78rem',
-            color: 'var(--texto)', background: 'var(--bg)', resize: 'vertical' }} />
-        <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+          placeholder={'12345\t00000000000\tFULANO\temail@pm.ce.gov.br\tSERVIDOR'}
+          style={{ width:'100%', minHeight:120, border:'1.5px solid var(--borda)',
+            borderRadius:10, padding:12, fontFamily:'monospace', fontSize:'0.78rem',
+            color:'var(--texto)', background:'var(--bg)', resize:'vertical' }} />
+        <div style={{ display:'flex', gap:10, marginTop:12 }}>
           <Botao variante="secundario" onClick={parsear}>Validar</Botao>
           {preview.filter(p => p.valido).length > 0 && (
             <Botao variante="verde" onClick={importar} carregando={importando}>
@@ -375,28 +377,28 @@ function ImportarCSV({ db, onSucesso }) {
 
       {preview.length > 0 && (
         <div style={card2}>
-          <p style={{ color: 'var(--texto-2)', fontSize: '0.8rem', marginBottom: 10 }}>
+          <p style={{ color:'var(--texto-2)', fontSize:'0.8rem', marginBottom:10 }}>
             {preview.filter(p=>p.valido).length} válidos ·{' '}
             {preview.filter(p=>!p.valido).length} com erro
           </p>
-          <div style={{ maxHeight: 260, overflowY: 'auto' }}>
-            {preview.map((p,i) => (
-              <div key={i} style={{ padding: '7px 0', borderBottom: '1px solid var(--borda)',
-                display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div style={{ maxHeight:260, overflowY:'auto' }}>
+            {preview.map((p, i) => (
+              <div key={i} style={{ padding:'7px 0', borderBottom:'1px solid var(--borda)',
+                display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
                 <div>
-                  <span style={{ fontWeight: 500, color: 'var(--texto)', fontSize: '0.82rem' }}>
+                  <span style={{ fontWeight:500, color:'var(--texto)', fontSize:'0.82rem' }}>
                     {p.nome || `Linha ${p.linha}`}
                   </span>
                   {p.errs.length > 0 && (
-                    <p style={{ color: 'var(--vermelho)', fontSize: '0.72rem', marginTop: 2 }}>
+                    <p style={{ color:'var(--vermelho)', fontSize:'0.72rem', marginTop:2 }}>
                       {p.errs.join(', ')}
                     </p>
                   )}
                 </div>
-                <span style={{ fontSize: '0.72rem', padding: '2px 8px', borderRadius: 10, marginLeft: 8,
+                <span style={{ fontSize:'0.72rem', padding:'2px 8px', borderRadius:10, marginLeft:8,
                   background: p.valido ? 'var(--verde-claro)' : '#fdf2f2',
                   color: p.valido ? 'var(--verde)' : 'var(--vermelho)',
-                  border: `1px solid ${p.valido ? 'var(--verde)' : 'var(--vermelho)'}40` }}>
+                  border:`1px solid ${p.valido ? 'var(--verde)' : 'var(--vermelho)'}40` }}>
                   {p.valido ? '✓' : '✗'}
                 </span>
               </div>
@@ -406,9 +408,9 @@ function ImportarCSV({ db, onSucesso }) {
       )}
 
       {log.length > 0 && (
-        <div style={{ ...card2, fontFamily: 'monospace', fontSize: '0.75rem',
-          maxHeight: 180, overflowY: 'auto', lineHeight: 1.8 }}>
-          {log.map((l,i) => (
+        <div style={{ ...card2, fontFamily:'monospace', fontSize:'0.75rem',
+          maxHeight:180, overflowY:'auto', lineHeight:1.8 }}>
+          {log.map((l, i) => (
             <div key={i} style={{ color: l.tipo==='ok' ? 'var(--verde)' :
               l.tipo==='erro' ? 'var(--vermelho)' : 'var(--texto-3)' }}>
               {l.msg}
