@@ -20,40 +20,41 @@ export function GerenciarUsuarios() {
   const { sessao, setPagina } = useStore()
   const db = supabaseAutenticado(sessao.token)
 
-  const [aba, setAba]               = useState('lista')
-  const [todos, setTodos]           = useState([])
-  const [busca, setBusca]           = useState('')
-  const [carregando, setCarregando] = useState(true)
+  const [aba, setAba]                 = useState('lista')
+  const [todos, setTodos]             = useState([])
+  const [busca, setBusca]             = useState('')
+  const [carregando, setCarregando]   = useState(true)
   const [selecionado, setSelecionado] = useState(null)
-  const [salvando, setSalvando]     = useState(false)
-  const [erro, setErro]             = useState('')
-  const [sucesso, setSucesso]       = useState('')
-  const [novo, setNovo]             = useState(DEP_NOVO)
-  const [errosNovo, setErrosNovo]   = useState({})
+  const [salvando, setSalvando]       = useState(false)
+  const [erro, setErro]               = useState('')
+  const [sucesso, setSucesso]         = useState('')
+  const [novo, setNovo]               = useState(DEP_NOVO)
+  const [errosNovo, setErrosNovo]     = useState({})
 
   useEffect(() => { carregar() }, [])
 
   async function carregar() {
     setCarregando(true)
+    setErro('')
     const { data, error } = await db
       .from('servidores')
       .select('id, matricula, cpf, nome, email, perfil_id, ativo')
       .order('nome')
     setCarregando(false)
-    if (error) { setErro('Erro ao carregar servidores.'); return }
+    if (error) { setErro('Erro ao carregar: ' + error.message); return }
     setTodos(data ?? [])
   }
 
-  const filtrados = busca.trim() === ''
-    ? todos
-    : todos.filter(s => {
-        const q = busca.toLowerCase().trim()
-        return (
-          s.nome.toLowerCase().includes(q) ||
-          s.matricula.includes(q) ||
-          s.cpf.includes(q.replace(/\D/g, ''))
-        )
-      })
+  const filtrados = todos.filter(s => {
+    if (!busca.trim()) return true
+    const q = busca.toLowerCase().trim()
+    const cpfLimpo = q.replace(/\D/g, '')
+    return (
+      s.nome.toLowerCase().includes(q) ||
+      s.matricula.toLowerCase().includes(q) ||
+      (cpfLimpo && s.cpf.includes(cpfLimpo))
+    )
+  })
 
   async function salvarPerfil() {
     if (!selecionado) return
@@ -62,16 +63,20 @@ export function GerenciarUsuarios() {
       const { error } = await db
         .from('servidores')
         .update({
-          perfil_id: Number(selecionado.perfil_id),
-          ativo:     selecionado.ativo,
+          perfil_id: parseInt(selecionado.perfil_id, 10),
+          ativo:     Boolean(selecionado.ativo),
         })
         .eq('id', selecionado.id)
+        .select()
       if (error) throw error
-      setSucesso(`Perfil de ${selecionado.nome.split(' ')[0]} atualizado com sucesso.`)
+      setSucesso(`Perfil de ${selecionado.nome.split(' ')[0]} atualizado.`)
       setSelecionado(null)
       await carregar()
-    } catch (e) { setErro(traduzirErro(e)) }
-    finally { setSalvando(false) }
+    } catch (e) {
+      setErro('Erro ao salvar: ' + (e.message ?? 'Verifique as permissões no Supabase.'))
+    } finally {
+      setSalvando(false)
+    }
   }
 
   function validarNovo() {
@@ -93,7 +98,7 @@ export function GerenciarUsuarios() {
         cpf:       normalizarCPF(novo.cpf),
         nome:      novo.nome.trim().toUpperCase(),
         email:     novo.email.trim(),
-        perfil_id: Number(novo.perfil_id),
+        perfil_id: parseInt(novo.perfil_id, 10),
         ativo:     true,
       })
       if (error) throw error
@@ -101,8 +106,11 @@ export function GerenciarUsuarios() {
       setNovo(DEP_NOVO)
       setErrosNovo({})
       await carregar()
-    } catch (e) { setErro(traduzirErro(e)) }
-    finally { setSalvando(false) }
+    } catch (e) {
+      setErro('Erro ao cadastrar: ' + (e.message ?? ''))
+    } finally {
+      setSalvando(false)
+    }
   }
 
   return (
@@ -119,7 +127,6 @@ export function GerenciarUsuarios() {
 
       <div style={{ padding:'0 16px', marginTop:-16 }}>
 
-        {/* Abas */}
         <div style={{ ...card, padding:'6px', display:'flex', gap:4 }}>
           {[
             { val:'lista', label:`👥 Lista (${todos.length})` },
@@ -127,7 +134,9 @@ export function GerenciarUsuarios() {
             { val:'csv',   label:'📥 Importar' },
           ].map(a => (
             <button key={a.val}
-              onClick={() => { setAba(a.val); setErro(''); setSucesso(''); setSelecionado(null) }}
+              onClick={() => {
+                setAba(a.val); setErro(''); setSucesso(''); setSelecionado(null)
+              }}
               style={{ flex:1, padding:'10px 4px', borderRadius:10,
                 background: aba===a.val ? 'var(--verde)' : 'transparent',
                 color: aba===a.val ? '#fff' : 'var(--texto-2)',
@@ -150,10 +159,14 @@ export function GerenciarUsuarios() {
                   alignItems:'center', marginBottom:16 }}>
                   <p style={{ fontFamily:'var(--fonte-titulo)', fontWeight:600,
                     color:'var(--texto)', fontSize:'0.95rem' }}>Editar Perfil</p>
-                  <button onClick={() => { setSelecionado(null); setErro(''); setSucesso('') }}
+                  <button
+                    onClick={() => { setSelecionado(null); setErro(''); setSucesso('') }}
                     style={{ background:'none', border:'none', cursor:'pointer',
-                      color:'var(--texto-3)', fontSize:'1.3rem', lineHeight:1 }}>×</button>
+                      color:'var(--texto-3)', fontSize:'1.3rem', lineHeight:1 }}>
+                    {String.fromCharCode(215)}
+                  </button>
                 </div>
+
                 <p style={{ fontWeight:600, color:'var(--texto)', marginBottom:2 }}>
                   {selecionado.nome}
                 </p>
@@ -163,18 +176,33 @@ export function GerenciarUsuarios() {
 
                 <label style={{ fontSize:'0.75rem', color:'var(--texto-2)',
                   letterSpacing:'0.06em', textTransform:'uppercase',
-                  fontWeight:600, display:'block', marginBottom:8 }}>Perfil</label>
+                  fontWeight:600, display:'block', marginBottom:8 }}>
+                  Perfil atual:{' '}
+                  <span style={{ color:'var(--verde)' }}>
+                    {PERFIS[selecionado.perfil_id]}
+                  </span>
+                </label>
+
                 <div style={{ display:'flex', gap:8, marginBottom:16 }}>
                   {Object.entries(PERFIS).map(([id, nome]) => (
                     <button key={id}
-                      onClick={() => setSelecionado(s => ({ ...s, perfil_id: Number(id) }))}
-                      style={{ flex:1, padding:'10px 4px', borderRadius:10,
-                        border:`2px solid ${selecionado.perfil_id===Number(id) ? 'var(--verde)' : 'var(--borda)'}`,
-                        background: selecionado.perfil_id===Number(id) ? 'var(--verde-claro)' : '#fff',
-                        color: selecionado.perfil_id===Number(id) ? 'var(--verde)' : 'var(--texto-2)',
+                      onClick={() => setSelecionado(s => ({
+                        ...s, perfil_id: parseInt(id, 10)
+                      }))}
+                      style={{
+                        flex:1, padding:'10px 4px', borderRadius:10,
+                        border:`2px solid ${
+                          selecionado.perfil_id === parseInt(id, 10)
+                            ? 'var(--verde)' : 'var(--borda)'
+                        }`,
+                        background: selecionado.perfil_id === parseInt(id, 10)
+                          ? 'var(--verde-claro)' : '#fff',
+                        color: selecionado.perfil_id === parseInt(id, 10)
+                          ? 'var(--verde)' : 'var(--texto-2)',
                         fontFamily:'var(--fonte-corpo)', fontSize:'0.75rem',
-                        fontWeight: selecionado.perfil_id===Number(id) ? 700 : 400,
-                        cursor:'pointer' }}>
+                        fontWeight: selecionado.perfil_id === parseInt(id, 10) ? 700 : 400,
+                        cursor:'pointer',
+                      }}>
                       {nome}
                     </button>
                   ))}
@@ -182,10 +210,13 @@ export function GerenciarUsuarios() {
 
                 <label style={{ display:'flex', alignItems:'center', gap:10,
                   cursor:'pointer', marginBottom:16 }}>
-                  <input type="checkbox" checked={selecionado.ativo}
+                  <input type="checkbox"
+                    checked={Boolean(selecionado.ativo)}
                     onChange={e => setSelecionado(s => ({ ...s, ativo: e.target.checked }))}
                     style={{ width:18, height:18, accentColor:'var(--verde)' }} />
-                  <span style={{ color:'var(--texto-2)', fontSize:'0.88rem' }}>Conta ativa</span>
+                  <span style={{ color:'var(--texto-2)', fontSize:'0.88rem' }}>
+                    Conta ativa
+                  </span>
                 </label>
 
                 <Botao variante="verde" onClick={salvarPerfil} carregando={salvando}>
@@ -201,25 +232,35 @@ export function GerenciarUsuarios() {
                 </div>
                 <p style={{ color:'var(--texto-3)', fontSize:'0.75rem',
                   marginBottom:10, textAlign:'right' }}>
-                  {filtrados.length} resultado(s)
+                  {filtrados.length} de {todos.length} servidor(es)
                 </p>
                 {carregando ? (
-                  <p style={{ color:'var(--texto-3)', textAlign:'center', padding:20 }}>Carregando...</p>
+                  <p style={{ color:'var(--texto-3)', textAlign:'center', padding:20 }}>
+                    Carregando...
+                  </p>
                 ) : filtrados.length === 0 ? (
                   <p style={{ color:'var(--texto-3)', textAlign:'center', padding:20 }}>
-                    {busca ? `Nenhum resultado para "${busca}".` : 'Nenhum servidor cadastrado.'}
+                    {busca.trim()
+                      ? `Nenhum resultado para "${busca}".`
+                      : 'Nenhum servidor cadastrado.'}
                   </p>
                 ) : (
                   <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
                     {filtrados.map(s => (
-                      <button key={s.id} onClick={() => { setSelecionado({ ...s }); setErro(''); setSucesso('') }}
-                        style={{ background:'#fff', border:'1.5px solid var(--borda)',
+                      <button key={s.id}
+                        onClick={() => {
+                          setSelecionado({ ...s, perfil_id: parseInt(s.perfil_id, 10) })
+                          setErro(''); setSucesso('')
+                        }}
+                        style={{
+                          background:'#fff', border:'1.5px solid var(--borda)',
                           borderRadius:'var(--raio-lg)', padding:'14px 16px',
                           cursor:'pointer', textAlign:'left', width:'100%',
                           display:'flex', justifyContent:'space-between', alignItems:'center',
                           opacity: s.ativo ? 1 : 0.5,
                           fontFamily:'var(--fonte-corpo)', boxShadow:'var(--sombra)',
-                          transition:'border-color 0.12s' }}
+                          transition:'border-color 0.12s',
+                        }}
                         onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--verde)'}
                         onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--borda)'}>
                         <div>
@@ -268,14 +309,21 @@ export function GerenciarUsuarios() {
                 <div style={{ display:'flex', gap:8 }}>
                   {Object.entries(PERFIS).map(([id, nome]) => (
                     <button key={id}
-                      onClick={() => setNovo(n => ({ ...n, perfil_id: Number(id) }))}
-                      style={{ flex:1, padding:'10px 4px', borderRadius:10,
-                        border:`2px solid ${novo.perfil_id===Number(id) ? 'var(--verde)' : 'var(--borda)'}`,
-                        background: novo.perfil_id===Number(id) ? 'var(--verde-claro)' : '#fff',
-                        color: novo.perfil_id===Number(id) ? 'var(--verde)' : 'var(--texto-2)',
+                      onClick={() => setNovo(n => ({ ...n, perfil_id: parseInt(id, 10) }))}
+                      style={{
+                        flex:1, padding:'10px 4px', borderRadius:10,
+                        border:`2px solid ${
+                          novo.perfil_id === parseInt(id, 10)
+                            ? 'var(--verde)' : 'var(--borda)'
+                        }`,
+                        background: novo.perfil_id === parseInt(id, 10)
+                          ? 'var(--verde-claro)' : '#fff',
+                        color: novo.perfil_id === parseInt(id, 10)
+                          ? 'var(--verde)' : 'var(--texto-2)',
                         fontFamily:'var(--fonte-corpo)', fontSize:'0.75rem',
-                        fontWeight: novo.perfil_id===Number(id) ? 700 : 400,
-                        cursor:'pointer' }}>
+                        fontWeight: novo.perfil_id === parseInt(id, 10) ? 700 : 400,
+                        cursor:'pointer',
+                      }}>
                       {nome}
                     </button>
                   ))}
@@ -290,7 +338,10 @@ export function GerenciarUsuarios() {
 
         {/* IMPORTAR */}
         {aba === 'csv' && (
-          <ImportarCSV db={db} onSucesso={() => { carregar(); setSucesso('Importação concluída.') }} />
+          <ImportarCSV
+            db={db}
+            onSucesso={() => { carregar(); setSucesso('Importação concluída.') }}
+          />
         )}
       </div>
     </div>
@@ -311,12 +362,13 @@ function ImportarCSV({ db, onSucesso }) {
       const cols = linha.split(/\t|;/).map(c => c.trim())
       const [matricula='', cpf='', nome='', email='', perfil=''] = cols
       const errs = []
-      if (!matricula)                         errs.push('matrícula ausente')
-      if (cpf.replace(/\D/g,'').length < 10)  errs.push('CPF inválido')
-      if (!nome)                              errs.push('nome ausente')
-      if (!PERFIS_MAP[perfil.toUpperCase()])  errs.push('perfil inválido')
+      if (!matricula)                        errs.push('matrícula ausente')
+      if (cpf.replace(/\D/g,'').length < 10) errs.push('CPF inválido')
+      if (!nome)                             errs.push('nome ausente')
+      if (!PERFIS_MAP[perfil.toUpperCase()]) errs.push('perfil inválido')
       return {
-        matricula, cpf: cpf.replace(/\D/g,'').padStart(11,'0'),
+        matricula,
+        cpf: cpf.replace(/\D/g,'').padStart(11,'0'),
         nome: nome.toUpperCase(), email,
         perfil_id: PERFIS_MAP[perfil.toUpperCase()] ?? 1,
         valido: errs.length === 0, errs, linha: i + 1,
@@ -348,8 +400,11 @@ function ImportarCSV({ db, onSucesso }) {
     if (ok > 0) onSucesso()
   }
 
-  const card2 = { background:'#fff', border:'1.5px solid var(--borda)',
-    borderRadius:'var(--raio-lg)', padding:'18px', marginBottom:14, boxShadow:'var(--sombra)' }
+  const card2 = {
+    background:'#fff', border:'1.5px solid var(--borda)',
+    borderRadius:'var(--raio-lg)', padding:'18px',
+    marginBottom:14, boxShadow:'var(--sombra)',
+  }
 
   return (
     <div>
@@ -395,10 +450,12 @@ function ImportarCSV({ db, onSucesso }) {
                     </p>
                   )}
                 </div>
-                <span style={{ fontSize:'0.72rem', padding:'2px 8px', borderRadius:10, marginLeft:8,
+                <span style={{
+                  fontSize:'0.72rem', padding:'2px 8px', borderRadius:10, marginLeft:8,
                   background: p.valido ? 'var(--verde-claro)' : '#fdf2f2',
                   color: p.valido ? 'var(--verde)' : 'var(--vermelho)',
-                  border:`1px solid ${p.valido ? 'var(--verde)' : 'var(--vermelho)'}40` }}>
+                  border:`1px solid ${p.valido ? 'var(--verde)' : 'var(--vermelho)'}40`,
+                }}>
                   {p.valido ? '✓' : '✗'}
                 </span>
               </div>
