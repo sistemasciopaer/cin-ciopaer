@@ -48,7 +48,7 @@ export function Relatorios() {
   const [filtroStatus, setFiltroStatus] = useState('TODOS')
   const [busca, setBusca]               = useState('')
   const [aba, setAba]                   = useState('resumo')
-  const [confirmando, setConfirmando]   = useState({}) // { [id]: true }
+  const [confirmando, setConfirmando]   = useState({})
 
   useEffect(() => { carregar() }, [])
 
@@ -81,7 +81,6 @@ export function Relatorios() {
         metodo: 'PESQUISA',
       })
       await db.from('agendamentos').update({ status: 'PRESENTE' }).eq('id', ag.id)
-      // Atualizar localmente sem recarregar tudo
       setAgendamentos(prev => prev.map(a =>
         a.id === ag.id ? { ...a, status: 'PRESENTE' } : a
       ))
@@ -118,20 +117,35 @@ export function Relatorios() {
 
   const datas = [...new Set(slots.map(s => s.data))].sort()
 
+  // ── CORRIGIDO: agrupa, ordena itens alfabeticamente, ordena grupos por data/hora ──
   function agrupadoPorDataHora(lista) {
     const grupos = {}
     lista.forEach(a => {
       if (!a.slot) return
       const chave = `${a.slot.data}|${a.slot.hora}`
-      if (!grupos[chave]) grupos[chave] = { data: a.slot.data, hora: a.slot.hora, itens: [] }
+      if (!grupos[chave]) {
+        grupos[chave] = { data: a.slot.data, hora: a.slot.hora, itens: [] }
+      }
       grupos[chave].itens.push(a)
     })
-    return Object.values(grupos).sort((a, b) =>
-      a.data !== b.data ? a.data.localeCompare(b.data) : a.hora.localeCompare(b.hora)
+    const resultado = Object.values(grupos)
+    resultado.forEach(g => {
+      g.itens.sort((a, b) =>
+        a.nome_agendado.localeCompare(b.nome_agendado, 'pt-BR', { sensitivity: 'base' })
+      )
+    })
+    resultado.sort((a, b) =>
+      a.data !== b.data
+        ? a.data.localeCompare(b.data)
+        : a.hora.localeCompare(b.hora)
     )
+    return resultado
   }
 
-  const ags = filtroData === 'TODOS' ? agendamentos : agendamentos.filter(a => a.slot?.data === filtroData)
+  const ags = filtroData === 'TODOS'
+    ? agendamentos
+    : agendamentos.filter(a => a.slot?.data === filtroData)
+
   const cards = [
     { label: 'Total',          valor: ags.length,                                      icon: '📋', cor: 'var(--verde)' },
     { label: 'Agendados',      valor: ags.filter(a => a.status === 'AGENDADO').length,  icon: '📅', cor: 'var(--verde)' },
@@ -161,12 +175,13 @@ export function Relatorios() {
     URL.revokeObjectURL(url)
   }
 
+  // ── CORRIGIDO: PDF compatível com Safari/iPhone — sem window.open ──
   function downloadPDF() {
     const grupos = agrupadoPorDataHora(agsFiltrados)
     const dataLabel = filtroData === 'TODOS' ? 'Todos os dias' : fmtData(filtroData)
     let tabelaHTML = ''
     grupos.forEach(g => {
-      const slot = slots.find(s => s.data === g.data && s.hora === g.hora)
+      const slot       = slots.find(s => s.data === g.data && s.hora === g.hora)
       const ocupados   = g.itens.filter(a => ['AGENDADO','PRESENTE'].includes(a.status)).length
       const capacidade = slot?.capacidade ?? 5
       tabelaHTML += `
@@ -177,7 +192,9 @@ export function Relatorios() {
             <span class="grupo-vagas">${ocupados}/${capacidade} vagas</span>
           </div>
           <table>
-            <thead><tr><th>#</th><th>Nome</th><th>CPF</th><th>Tipo</th><th>Status</th><th>Responsável</th></tr></thead>
+            <thead>
+              <tr><th>#</th><th>Nome</th><th>CPF</th><th>Tipo</th><th>Status</th><th>Responsável</th></tr>
+            </thead>
             <tbody>
               ${g.itens.map((a, i) => `
                 <tr class="${a.status === 'PRESENTE' ? 'presente' : ''}">
@@ -234,11 +251,17 @@ ${tabelaHTML}
 <div class="rodape">Sistema de Agendamentos CIOPAER — Documento gerado automaticamente</div>
 </body></html>`
 
-    const w = window.open('', '_blank')
-    if (!w) { alert('Permita pop-ups para gerar o PDF.'); return }
-    w.document.write(html)
-    w.document.close()
-    w.onload = () => w.print()
+    // ── Compatível com Safari/iPhone: usa blob + link em vez de window.open ──
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
+    const url  = URL.createObjectURL(blob)
+    const el   = document.createElement('a')
+    el.href    = url
+    el.target  = '_blank'
+    el.rel     = 'noopener'
+    document.body.appendChild(el)
+    el.click()
+    document.body.removeChild(el)
+    setTimeout(() => URL.revokeObjectURL(url), 5000)
   }
 
   if (carregando) return (
@@ -332,7 +355,9 @@ ${tabelaHTML}
                   <div style={{ fontSize:'1.3rem', marginBottom:6 }}>{c.icon}</div>
                   <div style={{ fontFamily:'var(--fonte-titulo)', fontSize:'1.6rem',
                     fontWeight:700, color:c.cor, lineHeight:1 }}>{c.valor}</div>
-                  <div style={{ color:'var(--texto-3)', fontSize:'0.65rem', marginTop:4 }}>{c.label}</div>
+                  <div style={{ color:'var(--texto-3)', fontSize:'0.65rem', marginTop:4 }}>
+                    {c.label}
+                  </div>
                 </div>
               ))}
             </div>
@@ -345,48 +370,60 @@ ${tabelaHTML}
                   Ocupação por horário
                 </p>
               </div>
-              {(filtroData === 'TODOS' ? slots : slots.filter(s => s.data === filtroData)).map((slot, i, arr) => {
-                const pct = Math.round((slot.ocupacao_atual / slot.capacidade) * 100)
-                const presentes = agendamentos.filter(a =>
-                  a.slot?.data === slot.data && a.slot?.hora === slot.hora && a.status === 'PRESENTE').length
-                const agendados = agendamentos.filter(a =>
-                  a.slot?.data === slot.data && a.slot?.hora === slot.hora && a.status === 'AGENDADO').length
-                return (
-                  <div key={slot.id} style={{
-                    padding:'10px 16px',
-                    borderBottom: i < arr.length - 1 ? '1px solid var(--borda)' : 'none',
-                    display:'grid',
-                    gridTemplateColumns: filtroData === 'TODOS' ? '72px 64px 1fr 36px 36px' : '64px 1fr 36px 36px',
-                    alignItems:'center', gap:8,
-                  }}>
-                    {filtroData === 'TODOS' && (
-                      <span style={{ color:'var(--texto-3)', fontSize:'0.72rem' }}>{fmtData(slot.data)}</span>
-                    )}
-                    <span style={{ fontFamily:'monospace', fontWeight:700,
-                      color:'var(--texto)', fontSize:'0.88rem' }}>
-                      {fmtHora(slot.hora)}
-                    </span>
-                    <div>
-                      <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                        <div style={{ flex:1, height:6, background:'var(--borda)', borderRadius:3 }}>
-                          <div style={{ height:'100%', borderRadius:3, width:`${pct}%`,
-                            background: pct>=100 ? 'var(--vermelho)' : pct>60 ? 'var(--laranja)' : 'var(--verde)',
-                            transition:'width 0.3s' }}/>
-                        </div>
-                        <span style={{ color:'var(--texto-3)', fontSize:'0.7rem', whiteSpace:'nowrap' }}>
-                          {slot.ocupacao_atual}/{slot.capacidade}
+              {(filtroData === 'TODOS' ? slots : slots.filter(s => s.data === filtroData))
+                .map((slot, i, arr) => {
+                  const pct = Math.round((slot.ocupacao_atual / slot.capacidade) * 100)
+                  const presentes = agendamentos.filter(a =>
+                    a.slot?.data === slot.data &&
+                    a.slot?.hora === slot.hora &&
+                    a.status === 'PRESENTE').length
+                  const agendados = agendamentos.filter(a =>
+                    a.slot?.data === slot.data &&
+                    a.slot?.hora === slot.hora &&
+                    a.status === 'AGENDADO').length
+                  return (
+                    <div key={slot.id} style={{
+                      padding:'10px 16px',
+                      borderBottom: i < arr.length - 1 ? '1px solid var(--borda)' : 'none',
+                      display:'grid',
+                      gridTemplateColumns: filtroData === 'TODOS'
+                        ? '72px 64px 1fr 36px 36px'
+                        : '64px 1fr 36px 36px',
+                      alignItems:'center', gap:8,
+                    }}>
+                      {filtroData === 'TODOS' && (
+                        <span style={{ color:'var(--texto-3)', fontSize:'0.72rem' }}>
+                          {fmtData(slot.data)}
                         </span>
+                      )}
+                      <span style={{ fontFamily:'monospace', fontWeight:700,
+                        color:'var(--texto)', fontSize:'0.88rem' }}>
+                        {fmtHora(slot.hora)}
+                      </span>
+                      <div>
+                        <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                          <div style={{ flex:1, height:6, background:'var(--borda)', borderRadius:3 }}>
+                            <div style={{ height:'100%', borderRadius:3, width:`${pct}%`,
+                              background: pct>=100 ? 'var(--vermelho)' :
+                                          pct>60  ? 'var(--laranja)' : 'var(--verde)',
+                              transition:'width 0.3s' }}/>
+                          </div>
+                          <span style={{ color:'var(--texto-3)', fontSize:'0.7rem', whiteSpace:'nowrap' }}>
+                            {slot.ocupacao_atual}/{slot.capacidade}
+                          </span>
+                        </div>
                       </div>
+                      <span style={{ textAlign:'center', color:'#27AE60',
+                        fontSize:'0.82rem', fontWeight:700 }}>
+                        {presentes || '—'}
+                      </span>
+                      <span style={{ textAlign:'center', color:'var(--verde)',
+                        fontSize:'0.82rem', fontWeight:700 }}>
+                        {agendados || '—'}
+                      </span>
                     </div>
-                    <span style={{ textAlign:'center', color:'#27AE60', fontSize:'0.82rem', fontWeight:700 }}>
-                      {presentes || '—'}
-                    </span>
-                    <span style={{ textAlign:'center', color:'var(--verde)', fontSize:'0.82rem', fontWeight:700 }}>
-                      {agendados || '—'}
-                    </span>
-                  </div>
-                )
-              })}
+                  )
+                })}
             </div>
           </>
         )}
@@ -428,8 +465,8 @@ ${tabelaHTML}
                   </span>
                   <span style={{ marginLeft:'auto', background:'rgba(255,255,255,0.2)',
                     color:'#fff', fontSize:'0.72rem', padding:'3px 10px', borderRadius:12 }}>
-                    {g.itens.filter(a => a.status === 'PRESENTE').length} presentes ·{' '}
-                    {g.itens.length} total
+                    {g.itens.filter(a => a.status === 'PRESENTE').length} presentes
+                    {' · '}{g.itens.length} total
                   </span>
                 </div>
 
@@ -437,8 +474,8 @@ ${tabelaHTML}
                   borderTop:'none', borderRadius:'0 0 10px 10px',
                   overflow:'hidden', boxShadow:'var(--sombra)' }}>
                   {g.itens.map((a, i) => {
-                    const presente    = a.status === 'PRESENTE'
-                    const podeMexer   = ehSupervisor && ['AGENDADO','PRESENTE'].includes(a.status)
+                    const presente      = a.status === 'PRESENTE'
+                    const podeMexer     = ehSupervisor && ['AGENDADO','PRESENTE'].includes(a.status)
                     const carregandoEste = confirmando[a.id]
                     return (
                       <div key={a.id} style={{
@@ -448,10 +485,9 @@ ${tabelaHTML}
                         background: presente ? '#f0faf5' : '#fff',
                         transition:'background 0.2s',
                       }}>
-                        {/* Número */}
                         <div style={{ width:26, height:26, borderRadius:'50%', flexShrink:0,
                           background: presente ? '#27AE60' : 'var(--bg)',
-                          border: `1px solid ${presente ? '#27AE60' : 'var(--borda)'}`,
+                          border:`1px solid ${presente ? '#27AE60' : 'var(--borda)'}`,
                           display:'flex', alignItems:'center', justifyContent:'center',
                           fontSize:'0.7rem', fontWeight:700,
                           color: presente ? '#fff' : 'var(--texto-3)',
@@ -459,12 +495,13 @@ ${tabelaHTML}
                           {presente ? '✓' : i + 1}
                         </div>
 
-                        {/* Dados */}
                         <div style={{ flex:1 }}>
-                          <p style={{ color: presente ? '#006830' : 'var(--texto)',
+                          <p style={{
+                            color: presente ? '#006830' : 'var(--texto)',
                             fontWeight: presente ? 700 : 600,
                             fontSize:'0.88rem', marginBottom:2,
-                            transition:'color 0.2s' }}>
+                            transition:'color 0.2s',
+                          }}>
                             {a.nome_agendado}
                           </p>
                           <p style={{ color:'var(--texto-3)', fontSize:'0.72rem' }}>
@@ -473,27 +510,26 @@ ${tabelaHTML}
                           </p>
                         </div>
 
-                        {/* Botão check — só para supervisor/admin */}
                         {podeMexer && (
                           <button
                             onClick={() => presente ? desfazerPresenca(a) : confirmarPresenca(a)}
                             disabled={carregandoEste}
                             title={presente ? 'Desfazer presença' : 'Confirmar presença'}
                             style={{
-                              width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
-                              border: `2px solid ${presente ? '#27AE60' : 'var(--borda)'}`,
+                              width:36, height:36, borderRadius:'50%', flexShrink:0,
+                              border:`2px solid ${presente ? '#27AE60' : 'var(--borda)'}`,
                               background: presente ? '#27AE60' : '#fff',
                               color: presente ? '#fff' : 'var(--texto-3)',
-                              fontSize: '1rem', cursor: carregandoEste ? 'wait' : 'pointer',
-                              display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              transition: 'all 0.2s',
+                              fontSize:'1rem',
+                              cursor: carregandoEste ? 'wait' : 'pointer',
+                              display:'flex', alignItems:'center', justifyContent:'center',
+                              transition:'all 0.2s',
                               opacity: carregandoEste ? 0.5 : 1,
                             }}>
                             {carregandoEste ? '…' : '✓'}
                           </button>
                         )}
 
-                        {/* Badge status — para servidor (sem botão) */}
                         {!podeMexer && (
                           <span style={{ fontSize:'0.68rem', fontWeight:600,
                             padding:'3px 8px', borderRadius:12,
@@ -523,7 +559,8 @@ ${tabelaHTML}
             </div>
 
             {busca.trim() === '' && (
-              <p style={{ color:'var(--texto-3)', textAlign:'center', padding:30, fontSize:'0.88rem' }}>
+              <p style={{ color:'var(--texto-3)', textAlign:'center',
+                padding:30, fontSize:'0.88rem' }}>
                 Digite um nome ou CPF para buscar.
               </p>
             )}
@@ -556,7 +593,8 @@ ${tabelaHTML}
                     <span style={{ fontSize:'0.7rem', fontWeight:600,
                       padding:'4px 10px', borderRadius:20,
                       background:`${cor}15`, color:cor,
-                      border:`1px solid ${cor}40`, marginLeft:12, whiteSpace:'nowrap' }}>
+                      border:`1px solid ${cor}40`,
+                      marginLeft:12, whiteSpace:'nowrap' }}>
                       {STATUS_LABEL[a.status] ?? a.status}
                     </span>
                   </div>
