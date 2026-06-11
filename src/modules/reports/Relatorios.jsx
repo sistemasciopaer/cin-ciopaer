@@ -117,7 +117,6 @@ export function Relatorios() {
 
   const datas = [...new Set(slots.map(s => s.data))].sort()
 
-  // ── CORRIGIDO: agrupa, ordena itens alfabeticamente, ordena grupos por data/hora ──
   function agrupadoPorDataHora(lista) {
     const grupos = {}
     lista.forEach(a => {
@@ -147,12 +146,12 @@ export function Relatorios() {
     : agendamentos.filter(a => a.slot?.data === filtroData)
 
   const cards = [
-    { label: 'Total',          valor: ags.length,                                      icon: '📋', cor: 'var(--verde)' },
-    { label: 'Agendados',      valor: ags.filter(a => a.status === 'AGENDADO').length,  icon: '📅', cor: 'var(--verde)' },
-    { label: 'Presentes',      valor: ags.filter(a => a.status === 'PRESENTE').length,  icon: '✓',  cor: '#27AE60' },
-    { label: 'Cancelados',     valor: ags.filter(a => a.status === 'CANCELADO').length, icon: '✗',  cor: 'var(--vermelho)' },
-    { label: 'Não compareceu', valor: ags.filter(a => a.status === 'NO_SHOW').length,   icon: '⏱',  cor: '#95A5A6' },
-    { label: 'Reagendados',    valor: ags.filter(a => a.status === 'REAGENDADO').length,icon: '↺',  cor: 'var(--laranja)' },
+    { label: 'Total',          valor: ags.length,                                       icon: '📋', cor: 'var(--verde)' },
+    { label: 'Agendados',      valor: ags.filter(a => a.status === 'AGENDADO').length,   icon: '📅', cor: 'var(--verde)' },
+    { label: 'Presentes',      valor: ags.filter(a => a.status === 'PRESENTE').length,   icon: '✓',  cor: '#27AE60' },
+    { label: 'Cancelados',     valor: ags.filter(a => a.status === 'CANCELADO').length,  icon: '✗',  cor: 'var(--vermelho)' },
+    { label: 'Não compareceu', valor: ags.filter(a => a.status === 'NO_SHOW').length,    icon: '⏱',  cor: '#95A5A6' },
+    { label: 'Reagendados',    valor: ags.filter(a => a.status === 'REAGENDADO').length, icon: '↺',  cor: 'var(--laranja)' },
   ]
 
   function downloadCSV() {
@@ -175,7 +174,6 @@ export function Relatorios() {
     URL.revokeObjectURL(url)
   }
 
-  // ── CORRIGIDO: PDF compatível com Safari/iPhone — sem window.open ──
   function downloadPDF() {
     const grupos = agrupadoPorDataHora(agsFiltrados)
     const dataLabel = filtroData === 'TODOS' ? 'Todos os dias' : fmtData(filtroData)
@@ -214,26 +212,29 @@ export function Relatorios() {
 
     const html = `<!DOCTYPE html>
 <html lang="pt-BR"><head><meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width"/>
 <style>
   @page { margin: 20mm 15mm; }
   body { font-family: Arial, sans-serif; font-size: 10px; color: #1a2e22; }
   .cabecalho { display:flex; align-items:center; gap:16px; border-bottom:3px solid #00803D; padding-bottom:12px; margin-bottom:16px; }
   .cabecalho img { height:70px; width:auto; }
-  .cabecalho-texto h1 { font-size:16px; color:#00803D; margin:0 0 4px; letter-spacing:0.05em; }
+  .cabecalho-texto h1 { font-size:16px; color:#00803D; margin:0 0 4px; }
   .cabecalho-texto p { font-size:10px; color:#4a6355; margin:0; }
-  .meta { display:flex; gap:20px; background:#e8f5ee; border:1px solid #00803D; border-radius:6px; padding:8px 14px; margin-bottom:16px; font-size:10px; color:#006830; }
+  .meta { display:flex; gap:20px; background:#e8f5ee; border:1px solid #00803D; border-radius:6px; padding:8px 14px; margin-bottom:16px; font-size:10px; color:#006830; flex-wrap:wrap; }
   .grupo { margin-bottom:20px; page-break-inside:avoid; }
   .grupo-header { background:#00803D; color:#fff; padding:7px 12px; border-radius:6px 6px 0 0; display:flex; gap:16px; align-items:center; }
   .grupo-data { font-weight:700; font-size:11px; }
   .grupo-hora { font-size:13px; font-weight:700; }
   .grupo-vagas { margin-left:auto; font-size:10px; background:rgba(255,255,255,0.2); padding:2px 8px; border-radius:10px; }
   table { width:100%; border-collapse:collapse; border:1px solid #d6ddd8; border-top:none; }
-  th { background:#f2f4f3; padding:6px 8px; text-align:left; font-size:9px; letter-spacing:0.04em; text-transform:uppercase; color:#4a6355; border-bottom:1px solid #d6ddd8; }
+  th { background:#f2f4f3; padding:6px 8px; text-align:left; font-size:9px; text-transform:uppercase; color:#4a6355; border-bottom:1px solid #d6ddd8; }
   td { padding:6px 8px; border-bottom:1px solid #edf0ee; font-size:10px; }
   tr:last-child td { border-bottom:none; }
   tr:nth-child(even) td { background:#f9fafb; }
   tr.presente td { background:#e8f5ee !important; }
+  .imprimir { display:block; margin:20px auto; padding:12px 32px; background:#00803D; color:#fff; border:none; border-radius:8px; font-size:14px; font-family:Arial,sans-serif; cursor:pointer; }
   .rodape { margin-top:20px; border-top:1px solid #d6ddd8; padding-top:8px; font-size:9px; color:#7a9588; text-align:center; }
+  @media print { .imprimir { display:none; } }
 </style></head><body>
 <div class="cabecalho">
   <img src="${BRASAO}" alt="CIOPAER" onerror="this.style.display='none'"/>
@@ -248,16 +249,15 @@ export function Relatorios() {
   <span><strong>Gerado em:</strong> ${new Date().toLocaleString('pt-BR')}</span>
 </div>
 ${tabelaHTML}
+<button class="imprimir" onclick="window.print()">Imprimir / Salvar PDF</button>
 <div class="rodape">Sistema de Agendamentos CIOPAER — Documento gerado automaticamente</div>
 </body></html>`
 
-    // ── Compatível com Safari/iPhone: usa blob + link em vez de window.open ──
     const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
     const url  = URL.createObjectURL(blob)
     const el   = document.createElement('a')
-    el.href    = url
-    el.target  = '_blank'
-    el.rel     = 'noopener'
+    el.href     = url
+    el.download = `relatorio_cin_${filtroData === 'TODOS' ? 'todos' : filtroData}.html`
     document.body.appendChild(el)
     el.click()
     document.body.removeChild(el)
@@ -288,7 +288,6 @@ ${tabelaHTML}
       <div style={{ padding:'0 16px', marginTop:-16 }}>
         {erro && <div style={{ marginBottom:14 }}><Alerta tipo="erro">{erro}</Alerta></div>}
 
-        {/* Filtro data */}
         <div style={{ ...card, padding:'12px 14px' }}>
           <p style={{ color:'var(--texto-3)', fontSize:'0.7rem', letterSpacing:'0.08em',
             textTransform:'uppercase', marginBottom:10 }}>Filtrar por dia</p>
@@ -306,7 +305,6 @@ ${tabelaHTML}
           </div>
         </div>
 
-        {/* Downloads */}
         <div style={{ ...card, padding:'12px 14px' }}>
           <p style={{ color:'var(--texto-3)', fontSize:'0.7rem', letterSpacing:'0.08em',
             textTransform:'uppercase', marginBottom:10 }}>
@@ -315,7 +313,7 @@ ${tabelaHTML}
           <div style={{ display:'flex', gap:8 }}>
             {[
               { label:'📄 CSV', fn: downloadCSV },
-              { label:'🖨️ PDF', fn: downloadPDF },
+              { label:'📋 Relatório', fn: downloadPDF },
             ].map(b => (
               <button key={b.label} onClick={b.fn} style={{
                 padding:'9px 18px', borderRadius:10,
@@ -325,9 +323,12 @@ ${tabelaHTML}
               }}>{b.label}</button>
             ))}
           </div>
+          <p style={{ color:'var(--texto-3)', fontSize:'0.7rem', marginTop:8, lineHeight:1.5 }}>
+            O relatório é baixado como arquivo HTML. Abra-o e toque em
+            {' '}<strong>Imprimir / Salvar PDF</strong> para gerar o PDF.
+          </p>
         </div>
 
-        {/* Abas */}
         <div style={{ ...card, padding:'6px', display:'flex', gap:4 }}>
           {[
             { val:'resumo', label:'📊 Resumo' },
@@ -344,7 +345,6 @@ ${tabelaHTML}
           ))}
         </div>
 
-        {/* RESUMO */}
         {aba === 'resumo' && (
           <>
             <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginBottom:14 }}>
@@ -428,7 +428,6 @@ ${tabelaHTML}
           </>
         )}
 
-        {/* LISTA POR HORÁRIO */}
         {aba === 'lista' && (
           <div>
             <div style={{ ...card, padding:'10px 14px', display:'flex', gap:8, flexWrap:'wrap' }}>
@@ -474,8 +473,8 @@ ${tabelaHTML}
                   borderTop:'none', borderRadius:'0 0 10px 10px',
                   overflow:'hidden', boxShadow:'var(--sombra)' }}>
                   {g.itens.map((a, i) => {
-                    const presente      = a.status === 'PRESENTE'
-                    const podeMexer     = ehSupervisor && ['AGENDADO','PRESENTE'].includes(a.status)
+                    const presente       = a.status === 'PRESENTE'
+                    const podeMexer      = ehSupervisor && ['AGENDADO','PRESENTE'].includes(a.status)
                     const carregandoEste = confirmando[a.id]
                     return (
                       <div key={a.id} style={{
@@ -549,7 +548,6 @@ ${tabelaHTML}
           </div>
         )}
 
-        {/* BUSCA */}
         {aba === 'busca' && (
           <div>
             <div style={{ marginBottom:14 }}>
