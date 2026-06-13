@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useStore } from '@/lib/store'
 import { validarCPF } from '@/lib/cpf'
 import { buscarServidor } from './authRepository'
-import { criarSessao } from '@/modules/session/sessionRepository'
+import { criarSessao } from '@/lib/sessao'
 import { registrarAuditoria } from '@/modules/audit/auditRepository'
 import { Campo } from '@/components/ui/Campo'
 import { Botao } from '@/components/ui/Botao'
@@ -13,9 +13,9 @@ const BRASAO   = 'https://blogger.googleusercontent.com/img/a/AVvXsEj0RgZz8nDwXY
 
 export function LoginPage() {
   const { setSessao, setPagina } = useStore()
-  const [matricula, setMatricula] = useState('')
-  const [cpf, setCpf]             = useState('')
-  const [erro, setErro]           = useState('')
+  const [matricula, setMatricula]   = useState('')
+  const [cpf, setCpf]               = useState('')
+  const [erro, setErro]             = useState('')
   const [carregando, setCarregando] = useState(false)
 
   async function handleLogin() {
@@ -28,20 +28,20 @@ export function LoginPage() {
       const { data: servidor, error } = await buscarServidor(matricula, cpf)
       if (error || !servidor) { setErro('Matrícula ou CPF incorretos.'); return }
 
-      const perfilId = servidor.perfil_id
-      // Supervisor/Admin = 8h, Servidor = 30min
-      const timeoutMin = perfilId >= 2 ? 480 : 30
-      const { token, expiraEm } = await criarSessao(servidor.id, timeoutMin)
+      const { token, expiraEm } = await criarSessao(servidor.id, servidor.perfil_id)
 
-      setSessao({
-        token, expiraEm, perfilId,
+      const sessao = {
+        token, expiraEm,
         servidorId: servidor.id,
         nome:       servidor.nome,
         email:      servidor.email,
         cpf:        servidor.cpf,
-      })
+        perfilId:   servidor.perfil_id,
+      }
+      setSessao(sessao)
+
       await registrarAuditoria(token, {
-        operacao: 'LOGIN', objeto: 'SERVIDOR', objetoId: servidor.id
+        operacao: 'LOGIN', objeto: 'SERVIDOR', objetoId: servidor.id,
       })
       setPagina('dashboard')
     } catch {
@@ -60,14 +60,11 @@ export function LoginPage() {
       background: 'linear-gradient(160deg, #e8f5ee 0%, #f2f4f3 60%)',
     }}>
       <div style={{ width: '100%', maxWidth: 400 }}>
-
-        {/* Card */}
         <div style={{
           background: '#fff', borderRadius: 20, padding: '40px 32px',
           boxShadow: '0 8px 40px rgba(0,104,48,0.12)',
           border: '1px solid rgba(0,128,61,0.1)',
         }}>
-          {/* Brasão */}
           <div style={{ textAlign: 'center', marginBottom: 28 }}>
             <img src={BRASAO} alt="CIOPAER"
               style={{ height: 80, width: 'auto', objectFit: 'contain',
@@ -84,7 +81,6 @@ export function LoginPage() {
               borderRadius: 2, margin: '14px auto 0' }}/>
           </div>
 
-          {/* Form */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <Campo label="Matrícula" type="text" value={matricula}
               onChange={e => setMatricula(e.target.value)}
@@ -99,7 +95,9 @@ export function LoginPage() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <Alerta tipo="erro">{erro}</Alerta>
                 <a href={linkWA} target="_blank" rel="noreferrer">
-                  <Botao variante="secundario">Falar com o Administrador (WhatsApp)</Botao>
+                  <Botao variante="secundario">
+                    Falar com o Administrador (WhatsApp)
+                  </Botao>
                 </a>
               </div>
             )}
@@ -116,4 +114,3 @@ export function LoginPage() {
     </div>
   )
 }
-
