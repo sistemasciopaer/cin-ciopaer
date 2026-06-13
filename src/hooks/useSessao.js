@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useStore } from '@/lib/store'
-import { invalidarSessao } from '@/modules/session/sessionRepository'
+import { invalidarSessao } from '@/lib/sessao'
 
 export function useSessao() {
   const { sessao, clearSessao, setPagina } = useStore()
